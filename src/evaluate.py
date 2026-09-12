@@ -88,9 +88,9 @@ def write_insights(
         "for India-trending YouTube videos (2017-2018 Kaggle snapshot).\n",
         f"1. **What predicts views most**: the strongest pre-publish signals are "
         f"`{top_views_features[0]}`, `{top_views_features[1]}`, and `{top_views_features[2]}`. "
-        f"Metadata effort (how much a creator writes and how a title is styled) outweighs "
-        f"category or timing here — title wording and description quality aren't cosmetic, "
-        f"they're the biggest levers a creator directly controls.\n",
+        f"Writing effort and style (description length, title capitalization) rival or beat "
+        f"category in importance — these are levers a creator directly controls, not just "
+        f"a consequence of what niche they're in.\n",
         f"2. **What predicts engagement (likes+comments per view) most**: "
         f"`{top_engagement_features[0]}`, `{top_engagement_features[1]}`, and "
         f"`{top_engagement_features[2]}` dominate. Views and engagement are driven by "
