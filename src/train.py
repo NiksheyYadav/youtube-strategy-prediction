@@ -79,7 +79,11 @@ def cross_validate(model_factory, X: pd.DataFrame, y: pd.Series) -> dict:
 def run_main_model(X: pd.DataFrame, y: pd.Series, target_name: str) -> dict:
     factories = {
         "random_forest": lambda: RandomForestRegressor(
-            n_estimators=200, random_state=RANDOM_STATE, n_jobs=-1
+            n_estimators=200,
+            max_depth=15,
+            min_samples_leaf=5,
+            random_state=RANDOM_STATE,
+            n_jobs=-1,
         ),
         "xgboost": lambda: XGBRegressor(
             n_estimators=200, random_state=RANDOM_STATE, n_jobs=-1

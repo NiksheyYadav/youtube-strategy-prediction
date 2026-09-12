@@ -20,15 +20,16 @@
       "mae": 0.7698685803823032
     },
     "model_path": "models\\views_model.pkl",
-    "scale": "log1p(views)"
+    "scale": "log1p(views)",
+    "note": "Retrained with max_depth=15/min_samples_leaf=5 dropped test R2 from 0.4039 to 0.3782 (diff 0.0257), outside the ~0.02 tolerance -- kept original unconstrained model (232MB)."
   },
   "engagement_rate": {
     "cv_results": {
       "random_forest": {
-        "r2_mean": 0.6030903126211606,
-        "r2_std": 0.019682387561099815,
-        "mae_mean": 0.00962776275713147,
-        "mae_std": 0.00027565074386811853
+        "r2_mean": 0.5978035570140129,
+        "r2_std": 0.02482854439252902,
+        "mae_mean": 0.009813664123910461,
+        "mae_std": 0.0003456896750289811
       },
       "xgboost": {
         "r2_mean": 0.5689886436292401,
@@ -39,9 +40,10 @@
     },
     "best_model": "random_forest",
     "test_metrics": {
-      "r2": 0.6164663871074462,
-      "mae": 0.010078691630185752
+      "r2": 0.612397114790234,
+      "mae": 0.010256338403248723
     },
-    "model_path": "models\\engagement_rate_model.pkl"
+    "model_path": "models\\engagement_rate_model.pkl",
+    "note": "Retrained with max_depth=15/min_samples_leaf=5: test R2 0.6165 -> 0.6124 (diff 0.0041), within tolerance -- adopted (17MB, down from 231MB)."
   }
 }
