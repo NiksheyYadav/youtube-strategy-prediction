@@ -26,6 +26,7 @@ from src.insights import (
 )
 
 from src.recommendations import generate_recommendation, resolve_runtime
+from src.ui_text import escape_markdown
 
 st.set_page_config(
     page_title="Signal Studio | YouTube Strategy",
@@ -650,9 +651,7 @@ def render_method(bundle: dict[str, object]) -> None:
 # --------------------------------------------------------------------------- #
 # Tab: AI coach (on-device language model with an evidence-checked, rule-based fallback)
 # --------------------------------------------------------------------------- #
-def esc(value: object) -> str:
-    """Escape Markdown so model-written text is shown as plain text."""
-    return re.sub(r"([\\`*_{}\[\]()#+\-!|>~$<])", r"\\\1", str(value))
+esc = escape_markdown
 
 
 def get_runtime():
@@ -703,7 +702,8 @@ def render_coach(bundle: dict[str, object], draft: Draft) -> None:
     recommendation = result.recommendation
 
     if result.source == "llm":
-        st.markdown(f"**AI coach** · local model `{esc(result.model)}` · {result.seconds:.0f}s · every claim checked against the evidence")
+        lite = " (lite fallback model)" if result.tier == "lite" else ""
+        st.markdown(f"**AI coach** · local model `{esc(result.model)}`{lite} · {result.seconds:.0f}s · every claim checked against the evidence")
     else:
         st.markdown("**Rule-based recommendations** · computed directly from the model's scored edits")
     if result.notice:

@@ -49,6 +49,7 @@ CATALOG: tuple[CatalogModel, ...] = (
     CatalogModel("qwen2.5:7b", 7.6, 4.7), CatalogModel("llama3.1:8b", 8.0, 4.9), CatalogModel("gemma2:9b", 9.2, 5.4),
     CatalogModel("qwen2.5:3b", 3.1, 1.9), CatalogModel("llama3.2:3b", 3.2, 2.0), CatalogModel("phi3.5", 3.8, 2.2),
     CatalogModel("gemma2:2b", 2.6, 1.6), CatalogModel("qwen2.5:1.5b", 1.5, 1.0), CatalogModel("llama3.2:1b", 1.2, 0.8),
+    CatalogModel("qwen2.5:0.5b", 0.5, 0.4),
 )
 CPU_MAX_PARAMS_B = 4.0   # CPU-only, 12 GB+ RAM: above this generation is too slow for an interactive button
 CPU_MAX_PARAMS_SMALL_B = 2.0  # CPU-only with 6-12 GB RAM (typically fewer cores)

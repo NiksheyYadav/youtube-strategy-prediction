@@ -35,6 +35,10 @@ class LLMUnavailable(LLMError):
     user_message = "No local language model is running."
 
 
+class LLMModelMissing(LLMUnavailable):
+    user_message = "A configured local model is not installed."
+
+
 class LLMTimeout(LLMError):
     user_message = "The local language model took too long."
 
@@ -52,7 +56,9 @@ class LLMConfig:
     backend: str = "auto"                     # auto | ollama | openai_compat | none
     base_url: str | None = None
     model: str | None = None                  # explicit override of the automatic choice
-    timeout_s: float = 120.0
+    fallback_model: str | None = "qwen2.5:0.5b"   # lite model tried when the main one fails ("" or "none" disables)
+    total_budget_s: float = 420.0             # stop trying further models after this long
+    timeout_s: float = 240.0
     num_ctx: int = 4096
     max_tokens: int = 900
     api_key: str | None = field(default=None, repr=False)   # optional, for local servers that require one
@@ -69,7 +75,9 @@ def config_from_env(env: dict[str, str] | None = None) -> LLMConfig:
         backend=env.get("LLM_BACKEND", "auto").strip().lower() or "auto",
         base_url=(env.get("LLM_BASE_URL") or "").strip() or None,
         model=(env.get("LLM_MODEL") or "").strip() or None,
-        timeout_s=float(env.get("LLM_TIMEOUT_S", "120")),
+        fallback_model=(lambda v: None if v.lower() in {"", "none"} else v)(env.get("LLM_FALLBACK_MODEL", "qwen2.5:0.5b").strip()),
+        total_budget_s=float(env.get("LLM_TOTAL_BUDGET_S", "420")),
+        timeout_s=float(env.get("LLM_TIMEOUT_S", "240")),
         num_ctx=int(env.get("LLM_NUM_CTX", "4096")),
         max_tokens=int(env.get("LLM_MAX_TOKENS", "900")),
         api_key=(env.get("LLM_API_KEY") or "").strip() or None,
@@ -147,7 +155,7 @@ def generate_json(config: LLMConfig, backend: str, base_url: str, model: str, sy
                 raise LLMUnavailable() from error
             if response.status_code == 404:
                 status = "model-missing"
-                raise LLMUnavailable(f"model '{model}' is not installed on the local server")
+                raise LLMModelMissing(f"model '{model}' is not installed on the local server")
             if response.status_code >= 500 and attempt == 1:
                 time.sleep(0.5)
                 continue

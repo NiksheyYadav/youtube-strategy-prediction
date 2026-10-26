@@ -15,7 +15,8 @@ from src.advanced_model import normalise_tags
 from src.device_profile import DeviceProfile, ModelChoice, detect_device, select_model
 from src.inference import predict_video
 from src.insights import Draft
-from src.llm_client import LLMConfig, LLMError, LLMUnavailable, config_from_env, generate_json, list_models
+from src.llm_client import (LLMConfig, LLMError, LLMModelMissing, LLMUnavailable, config_from_env, generate_json,
+                            list_models)
 from src.reco_evidence import DATASET_LIMIT, EvidencePacket, build_evidence
 from src.reco_schema import RECOMMENDATION_SCHEMA, InvalidRecommendation, _caps_ratio, parse_and_validate
 
@@ -126,10 +127,17 @@ class RuntimeStatus:
     base_url: str | None
     installed: tuple[str, ...]
     choice: ModelChoice
+    fallback: str | None = None     # installed lite model tried if the main model fails
 
     @property
     def ready(self) -> bool:
         return bool(self.backend and self.choice.name)
+
+
+def _find_installed(prefix: str | None, installed: list[str]) -> str | None:
+    if not prefix:
+        return None
+    return next((name for name in installed if name.lower().startswith(prefix.lower())), None)
 
 
 def resolve_runtime(config: LLMConfig | None = None, profile: DeviceProfile | None = None) -> RuntimeStatus:
@@ -147,18 +155,21 @@ def resolve_runtime(config: LLMConfig | None = None, profile: DeviceProfile | No
     except LLMUnavailable:
         hint = select_model(profile, []).pull_hint
         return RuntimeStatus(profile, config, None, None, (), ModelChoice(None, "no local model server is running", hint))
-    return RuntimeStatus(profile, config, backend, url, tuple(installed), select_model(profile, list(installed), config.model))
+    choice = select_model(profile, list(installed), config.model)
+    lite = _find_installed(config.fallback_model, list(installed))
+    return RuntimeStatus(profile, config, backend, url, tuple(installed), choice, lite if lite != choice.name else None)
 
 
 @dataclass(frozen=True)
 class RecommendationResult:
     recommendation: dict
     source: str                 # "llm" or "rules"
-    notice: str | None          # why the rule-based fallback is shown (safe to display)
+    notice: str | None          # why a fallback is shown (safe to display)
     model: str | None
     packet: object              # EvidencePacket; carries the untouched ML Prediction
     rescored: list[dict]        # ML re-scoring of proposed titles/tags
     seconds: float
+    tier: str | None = None     # "main" or "lite" when source == "llm"
 
     @property
     def forecast(self):
@@ -189,32 +200,56 @@ def _rescore(bundle: dict, draft: Draft, base, recommendation: dict) -> list[dic
 
 def generate_recommendation(bundle: dict, draft: Draft, *, runtime: RuntimeStatus | None = None,
                             similarity_index: dict | None = None, generate=None) -> RecommendationResult:
-    """Evidence -> (on-device LLM, validated) or rules.  The ML forecast is carried through untouched."""
+    """Evidence -> main model -> lite model -> rules.  The ML forecast is carried through untouched.
+
+    Each model gets one repair retry. A dead server skips straight to rules; a timeout, a missing model
+    or an answer that fails validation moves on to the next model in the chain.
+    """
     started = time.perf_counter()
     generate = generate or generate_json
     packet = build_evidence(bundle, draft, similarity_index)
-    recommendation, source, notice, model = rules_recommendation(packet), "rules", None, None
+    recommendation, source, notice, model, tier = rules_recommendation(packet), "rules", None, None, None
     if runtime is None or not runtime.ready:
         reason = runtime.choice.reason if runtime else "no language model configured"
         hint = f" Install a model with `{runtime.choice.pull_hint}`." if runtime and runtime.choice.pull_hint else ""
         notice = f"Rule-based advice shown: {reason}.{hint}"
     else:
         system, user = build_messages(packet)
-        errors: list[str] = []
-        for attempt in (1, 2):
-            prompt = user if attempt == 1 else user + "\n\nYour previous JSON was rejected: " + "; ".join(errors[:4]) + ". Return corrected JSON only."
-            try:
-                text = generate(runtime.config, runtime.backend, runtime.base_url, runtime.choice.name, system, prompt, _server_schema(RECOMMENDATION_SCHEMA))
-            except LLMError as error:
-                notice = f"Rule-based advice shown: {error.user_message}"
+        chain = [("main", runtime.choice.name)] + ([("lite", runtime.fallback)] if runtime.fallback else [])
+        problems: list[str] = []
+        stop = False
+        for label, name in chain:
+            errors: list[str] = []
+            for attempt in (1, 2):
+                if time.perf_counter() - started > runtime.config.total_budget_s:
+                    problems.append("the time budget ran out")
+                    stop = True
+                    break
+                prompt = user if attempt == 1 else user + "\n\nYour previous JSON was rejected: " + "; ".join(errors[:4]) + ". Return corrected JSON only."
+                try:
+                    text = generate(runtime.config, runtime.backend, runtime.base_url, name, system, prompt, _server_schema(RECOMMENDATION_SCHEMA))
+                except LLMModelMissing as error:
+                    problems.append(f"{label} model missing")
+                    break
+                except LLMUnavailable as error:
+                    problems.append(error.user_message.rstrip("."))
+                    stop = True
+                    break
+                except LLMError as error:
+                    problems.append(f"{label} model: {error.user_message.rstrip('.').lower()}")
+                    break
+                try:
+                    recommendation, source, model, tier = parse_and_validate(text, packet), "llm", name, label
+                    break
+                except InvalidRecommendation as error:
+                    errors = error.errors
+                    if attempt == 2:
+                        problems.append(f"{label} model answer failed the evidence checks")
+            if source == "llm" or stop:
                 break
-            try:
-                recommendation, source, model = parse_and_validate(text, packet), "llm", runtime.choice.name
-                break
-            except InvalidRecommendation as error:
-                errors = error.errors
-                notice = "Rule-based advice shown: the local model's answer did not pass the evidence checks."
         if source == "llm":
-            notice = None
+            notice = ("The main model could not answer (" + "; ".join(problems) + "), so the lite model wrote this advice.") if tier == "lite" else None
+        else:
+            notice = "Rule-based advice shown: " + ("; ".join(problems) if problems else "no model answered") + "."
     return RecommendationResult(copy.deepcopy(recommendation), source, notice, model, packet,
-                                _rescore(bundle, draft, packet.prediction, recommendation), time.perf_counter() - started)
+                                _rescore(bundle, draft, packet.prediction, recommendation), time.perf_counter() - started, tier)
