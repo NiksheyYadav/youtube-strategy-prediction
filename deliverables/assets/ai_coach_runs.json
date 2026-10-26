@@ -1,0 +1,81 @@
+{
+ "device": "16 GB RAM, 16 threads, no NVIDIA GPU",
+ "main": "qwen2.5:3b",
+ "lite": "qwen2.5:0.5b",
+ "runs": [
+  {
+   "draft": "education",
+   "source": "llm",
+   "tier": "main",
+   "model": "qwen2.5:3b",
+   "seconds": 38,
+   "dropped": 1,
+   "titles": [
+    "Effective Study Strategies for Students",
+    "Top Study Tips for Academic Success"
+   ],
+   "rescored": [
+    -8.4,
+    16.2
+   ],
+   "notice": "1 model-written passage(s) were removed by the evidence checks."
+  },
+  {
+   "draft": "music",
+   "source": "llm",
+   "tier": "main",
+   "model": "qwen2.5:3b",
+   "seconds": 37,
+   "dropped": 0,
+   "titles": [
+    "Neon Nights (Official Hindi Song Video) - How to Watch?",
+    "Neon Nights (Official Hindi Song) - Subscribe for More?",
+    "Neon Nights (Official Hindi Song) - Subscribe Now?"
+   ],
+   "rescored": [
+    -44.8,
+    -46.6,
+    -45.7
+   ],
+   "notice": null
+  },
+  {
+   "draft": "tech",
+   "source": "llm",
+   "tier": "main",
+   "model": "qwen2.5:3b",
+   "seconds": 37,
+   "dropped": 0,
+   "titles": [
+    "5 Things I Wish I Knew Before Buying This Phone!",
+    "5 Things I Wish I Knew Before Buying This Phone - The Must-Know Guide",
+    "5 Things I Wish I Knew Before Buying This Phone: A Must-Read"
+   ],
+   "rescored": [
+    7.0,
+    -31.9,
+    -25.8
+   ],
+   "notice": null
+  },
+  {
+   "draft": "trailer",
+   "source": "llm",
+   "tier": "main",
+   "model": "qwen2.5:3b",
+   "seconds": 38,
+   "dropped": 2,
+   "titles": [
+    "Official Trailer | 187K Views This Friday",
+    "Movie Trailer | Upcoming Release",
+    "New Movie | Exciting New Release"
+   ],
+   "rescored": [
+    18.0,
+    -17.9,
+    5.2
+   ],
+   "notice": "2 model-written passage(s) were removed by the evidence checks."
+  }
+ ]
+}

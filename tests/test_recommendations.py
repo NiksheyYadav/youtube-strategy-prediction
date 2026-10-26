@@ -69,3 +69,23 @@ def test_resolve_runtime_never_raises_and_respects_disable(monkeypatch):
 
 def test_model_written_markdown_is_escaped():
     assert escape_markdown("Use **bold** and _italic_ [x](y) $5") == r"Use \*\*bold\*\* and \_italic\_ \[x\]\(y\) \$5"
+
+
+def test_a_comma_separated_tag_string_from_a_small_model_is_repaired_not_rejected():
+    from src.recommendations import LLM_SCHEMA, normalise_llm_answer
+    import jsonschema
+    messy = {"summary": "Two sentences.", "priority_explanations": ["a", "b"], "tags": ["phone review, smartphone, #tech review, buying guide"],
+             "title_alternatives": [{"title": "A decent new title", "rationale": "keeps words"}, {"title": "x"}], "description_tips": "one tip"}
+    fixed = normalise_llm_answer(messy)
+    assert fixed["tags"] == ["phone review", "smartphone", "tech review", "buying guide"]
+    assert fixed["description_tips"] == ["one tip"] and len(fixed["title_alternatives"]) == 1
+    assert list(jsonschema.Draft202012Validator(LLM_SCHEMA).iter_errors(fixed)) == []
+
+
+def test_non_objects_and_over_long_passages_are_still_rejected_or_dropped():
+    from src.reco_schema import InvalidRecommendation
+    from src.recommendations import normalise_llm_answer
+    with pytest.raises(InvalidRecommendation):
+        normalise_llm_answer(["not", "an", "object"])
+    fixed = normalise_llm_answer({"summary": "x" * 700, "priority_explanations": ["y" * 400, "short ok"]})
+    assert fixed["summary"] == "" and fixed["priority_explanations"] == ["short ok"]

@@ -1,0 +1,1 @@
+{"total": 131, "by_file": {"test_advanced_model": 5, "test_app": 8, "test_device_and_llm_client": 25, "test_golden_predictions": 1, "test_inference": 2, "test_insights": 16, "test_launcher": 8, "test_model_contract": 4, "test_no_secrets": 5, "test_real_model": 5, "test_reco_evidence": 13, "test_reco_schema": 32, "test_recommendations": 6, "test_workflows": 1}}

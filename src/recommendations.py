@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import copy
 import json
+import re
 import time
 from dataclasses import dataclass
 
@@ -205,6 +206,42 @@ def build_messages(packet, skeleton: dict | None = None) -> tuple[str, str]:
     return SYSTEM_PROMPT, json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
 
 
+def normalise_llm_answer(data: object) -> dict:
+    """Repair harmless formatting slips of small models before validation.
+
+    Splits a comma-separated tag string into tags, drops over-long strings and malformed items, trims lists to their
+    limits and fills missing fields with empty values. Anything that is not a JSON object is still rejected.
+    """
+    if not isinstance(data, dict):
+        raise InvalidRecommendation(["answer is not a JSON object"])
+    props = LLM_SCHEMA["properties"]
+
+    def strings(value, limit: int) -> list[str]:
+        items = value if isinstance(value, list) else ([value] if isinstance(value, str) else [])
+        return [s.strip() for s in items if isinstance(s, str) and 0 < len(s.strip()) <= limit]
+
+    out: dict = {}
+    summary = data.get("summary")
+    out["summary"] = summary.strip() if isinstance(summary, str) and len(summary.strip()) <= 600 else ""
+    for key in ("priority_explanations", "weakness_explanations", "description_tips"):
+        out[key] = strings(data.get(key), props[key]["items"]["maxLength"])[: props[key]["maxItems"]]
+    raw_tags = data.get("tags")
+    pieces: list[str] = []
+    for item in (raw_tags if isinstance(raw_tags, list) else [raw_tags]):
+        if isinstance(item, str):
+            pieces += [t.strip().strip("\"'").lstrip("#").strip() for t in re.split(r"[,;|\n]", item)]
+    out["tags"] = list(dict.fromkeys(t for t in pieces if 2 <= len(t) <= 30))[: props["tags"]["maxItems"]]
+    rationale = data.get("tag_rationale")
+    out["tag_rationale"] = rationale.strip() if isinstance(rationale, str) and len(rationale.strip()) <= 260 else ""
+    titles = []
+    for item in data.get("title_alternatives") if isinstance(data.get("title_alternatives"), list) else []:
+        if isinstance(item, dict) and isinstance(item.get("title"), str) and 4 <= len(item["title"].strip()) <= 100:
+            reason = item.get("rationale") if isinstance(item.get("rationale"), str) else ""
+            titles.append({"title": item["title"].strip(), "rationale": reason.strip()[:260]})
+    out["title_alternatives"] = titles[:3]
+    return out
+
+
 def merge_llm(skeleton: dict, llm: dict, packet: EvidencePacket) -> tuple[dict, int, int]:
     """Blend model-written wording into the rule-based skeleton.
 
@@ -294,9 +331,16 @@ def generate_recommendation(bundle: dict, draft: Draft, *, runtime: RuntimeStatu
         notice = f"Rule-based advice shown: {reason}.{hint}"
     else:
         system, user = build_messages(packet, skeleton)
-        chain = [("main", runtime.choice.name)] + ([("lite", runtime.fallback)] if runtime.fallback else [])
+        # the main model appears twice: the second entry is a retry used only after a formatting failure
+        chain = [("main", runtime.choice.name)] * 2 + ([("lite", runtime.fallback)] if runtime.fallback else [])
         problems: list[str] = []
+        main_tries, last_was_format_failure = 0, False
         for label, name in chain:
+            retry_allowed, last_was_format_failure = last_was_format_failure, False
+            if label == "main":
+                if main_tries >= 1 and not retry_allowed:
+                    continue
+                main_tries += 1
             if time.perf_counter() - started > runtime.config.total_budget_s:
                 problems.append("the time budget ran out")
                 break
@@ -312,11 +356,12 @@ def generate_recommendation(bundle: dict, draft: Draft, *, runtime: RuntimeStatu
                 problems.append(f"{label} model: {error.user_message.rstrip('.').lower()}")
                 continue
             try:
-                data = loads_json(text)
+                data = normalise_llm_answer(loads_json(text))
                 if list(jsonschema.Draft202012Validator(LLM_SCHEMA).iter_errors(data)):
                     raise InvalidRecommendation(["schema"])
             except InvalidRecommendation:
                 problems.append(f"{label} model answered in the wrong format")
+                last_was_format_failure = True
                 continue
             merged, used, dropped = merge_llm(skeleton, data, packet)
             if used == 0 or validate_recommendation(merged, packet):
