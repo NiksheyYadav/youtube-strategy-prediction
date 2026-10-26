@@ -8,3 +8,5 @@ joblib==1.6.0
 streamlit==1.65.0
 scipy==1.15.3
 pytest==9.1.1
+requests==2.34.2
+jsonschema==4.26.0

@@ -22,7 +22,33 @@ It uses only information a creator controls before upload: title, tags, descript
 | **Scenario lab** | A vs B? Same draft in another category? | Side-by-side forecast with an interval-overlap check ("within the model's uncertainty?"), plus a category what-if chart. |
 | **Model brief** | How good is it, honestly? | R², chronological holdout, **measured interval coverage**, feature-group importance, limits. |
 
+| **AI coach** | What should I change first, and why? | Evidence-grounded, schema-validated advice from an on-device model (or the rule-based fallback); proposed titles/tags are re-scored by the ML model. |
+
 A downloadable **strategy brief** (Markdown) summarises one draft.
+
+## AI coach (on-device language model)
+
+The **AI coach** tab turns the model's numbers into a few prioritised, explained suggestions. The language model only *writes advice*; every number shown (forecast, re-scored titles and tags) comes from the trained Random Forest, and the forecast is never altered by the language model (a golden-snapshot test proves the ML outputs are unchanged).
+
+```text
+draft -> ML forecast (untouched) -> evidence packet (ID-tagged facts) -> local model -> validation -> app
+                                          \-> rule-based recommender (always available, used as the fallback)
+```
+
+- **Grounded:** the model may only use the packet's facts and must cite their ids. Output is rejected unless it matches a strict JSON schema, quotes only numbers present in the evidence, avoids promises ("will go viral"), keeps title ideas close to the draft's own words, and only gives timing advice when the data supports it. One repair retry, then the rule-based advice is shown with the reason.
+- **On-device and private:** talks only to a loopback server (Ollama or any OpenAI-compatible local server); no API key, no online service. Prompts and answers are never logged.
+- **Device-aware:** the app detects RAM, CPU threads and NVIDIA VRAM and picks the best *installed* model that suits it (about 7B on an 8 GB GPU such as an RTX 5050 laptop, 3B on a 16 GB CPU-only laptop, 1.5B on 8 GB RAM, rule-based below that). Nothing is downloaded automatically.
+
+Enable it on a machine:
+
+```powershell
+# install Ollama (https://ollama.com), then pull the model the AI coach tab recommends for this device, e.g.
+ollama pull qwen2.5:7b     # 8 GB NVIDIA GPU (RTX 50-series needs a recent Ollama + NVIDIA driver)
+ollama pull qwen2.5:3b     # CPU-only laptop with 16 GB RAM
+.un_demo.ps1
+```
+
+Settings are optional environment variables (see `.env.example`). The hosted Render service has no model, so it runs in rule-based mode; run locally to use the language model. Tests use a fake model and need no download; `RUN_LIVE_LLM_TESTS=1 python -m pytest tests/test_llm_live.py -s` checks a real local model.
 
 ## Verified results
 

@@ -66,6 +66,10 @@ Each suggestion is one programmatic edit (add a number, phrase as a question, ad
 
 It uses a different method with no model: TF-IDF vectors of title and tags, cosine similarity to every trending video, and the weighted median views of the closest ones. If it agrees with the Random Forest within a factor of two the app says "Consistent"; otherwise "Differ", which is useful information in itself (look-alikes may be much bigger channels).
 
+### How does the AI coach avoid making things up?
+
+The model never produces numbers. It receives a packet of ID-tagged facts computed by the existing ML code, must cite those ids, and its JSON is rejected unless every figure it quotes exists in the evidence, it makes no promises, titles stay close to the draft's own words, and timing advice is allowed by the data. Proposed titles and tags are re-scored by the trained Random Forest, so the displayed changes are model estimates, not language-model guesses. If anything fails, a rule-based recommender built from the same evidence is shown instead. It runs on-device (Ollama), and the app picks a model size that fits the laptop's RAM and GPU.
+
 ### What are the main limitations?
 
 The data is from 2017–2018 and includes only India-trending videos. It lacks thumbnails, channel subscribers, audience retention, video topic semantics, and YouTube’s internal recommendation signals. The observations are associations and do not support causal claims.
