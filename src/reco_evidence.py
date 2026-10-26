@@ -124,7 +124,7 @@ def build_evidence(bundle: dict[str, object], draft: Draft, similarity_index: di
     for item in [s for s in suggestions if s.views_change_pct >= MIN_EDIT_EFFECT_PCT][:4]:
         add("edit_up", f"Model-scored edit '{item.label}' changes the views forecast by {item.views_change_pct:+.1f}% "
             f"and engagement by {item.engagement_change_pp:+.2f} pp.", key=item.key, field=item.field,
-            views_change_pct=item.views_change_pct, label=item.label)
+            views_change_pct=item.views_change_pct, label=item.label, why=item.why, draft=item.draft)
     for item in [s for s in suggestions if s.views_change_pct <= -MIN_EDIT_EFFECT_PCT][-2:]:
         add("edit_down", f"Model-scored edit '{item.label}' would lower the views forecast by {abs(item.views_change_pct):.1f}%.",
             key=item.key, field=item.field, views_change_pct=item.views_change_pct, label=item.label)
