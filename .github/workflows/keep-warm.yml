@@ -1,11 +1,11 @@
 name: Keep Render service warm
 
 # Render's free tier spins a service down after ~15 minutes without traffic.
-# GitHub cron is best-effort (runs can be delayed), so ping every 10 minutes.
+# GitHub cron is best-effort and busy slots (:00, :10, ...) are often skipped, so use off-peak minutes every 10 minutes.
 # Disable without a code change: repo Settings > Variables > KEEP_WARM_ENABLED = false.
 on:
   schedule:
-    - cron: "*/10 * * * *"
+    - cron: "4-59/10 * * * *"
   workflow_dispatch:
 
 permissions: {}
