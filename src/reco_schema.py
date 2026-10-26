@@ -116,6 +116,36 @@ def _caps_ratio(text: str) -> float:
     return sum(c.isupper() for c in letters) / len(letters) if letters else 0.0
 
 
+def text_problems(text: str, packet: EvidencePacket) -> list[str]:
+    """Problems with one passage of text: over-confident wording, links/HTML, or numbers not in the evidence."""
+    problems = []
+    if overconfident(text):
+        problems.append("claims: over-confident wording")
+    if MARKUP.search(text):
+        problems.append("markup: links or HTML")
+    allowed = quoted_numbers(packet.corpus())
+    for value, unit in quoted_numbers(text):
+        if not any(unit == u and abs(value - v) <= max(0.06, 0.02 * v) for v, u in allowed):
+            problems.append(f"numbers: {value:g}{unit} is not in the evidence")
+    return problems
+
+
+def title_problems(title: str, draft) -> list[str]:
+    """Why a proposed title is not acceptable (empty list = fine)."""
+    problems = []
+    if title.strip().lower() == draft.title.strip().lower():
+        problems.append("repeats the current title")
+    if _caps_ratio(title) > 0.6 and len(title) > 8:
+        problems.append("is mostly capitals")
+    if MARKUP.search(title) or title.count("!") > 1 or overconfident(title):
+        problems.append("has markup, repeated exclamation marks or over-confident wording")
+    original_words = set(title_words(draft.title))
+    context_words = original_words | set(title_words(draft.description)) | set(title_words(draft.tags.replace("|", " ")))
+    if len(original_words) >= 2 and len(set(title_words(title)) & context_words) < max(1, round(0.4 * len(original_words))):
+        problems.append("drifts away from the draft's own words")
+    return problems
+
+
 def validate_recommendation(data: object, packet: EvidencePacket) -> list[str]:
     """Return a list of problems (empty = valid)."""
     validator = jsonschema.Draft202012Validator(RECOMMENDATION_SCHEMA)
@@ -128,15 +158,8 @@ def validate_recommendation(data: object, packet: EvidencePacket) -> list[str]:
     if unknown:
         errors.append(f"evidence: unknown ids {unknown}")
 
-    allowed = quoted_numbers(packet.corpus())
     for path, text in _walk_strings({k: v for k, v in data.items() if k != "title_alternatives"}):
-        if overconfident(text):
-            errors.append(f"claims: over-confident wording in {path}")
-        if MARKUP.search(text):
-            errors.append(f"markup: links or HTML in {path}")
-        for value, unit in quoted_numbers(text):
-            if not any(unit == u and abs(value - v) <= max(0.06, 0.02 * v) for v, u in allowed):
-                errors.append(f"numbers: {value:g}{unit} in {path} is not in the evidence")
+        errors += [f"{problem} in {path}" for problem in text_problems(text, packet)]
 
     draft = packet.draft
     advice = data["timing_category_advice"]
@@ -145,20 +168,8 @@ def validate_recommendation(data: object, packet: EvidencePacket) -> list[str]:
     if advice["advice"] and not advice["evidence"]:
         errors.append("evidence: timing/category advice cites no evidence")
 
-    original_words = set(title_words(draft.title))
-    context_words = original_words | set(title_words(draft.description)) | set(title_words(draft.tags.replace("|", " ")))
     for index, item in enumerate(data["title_alternatives"]):
-        title = item["title"]
-        path = f"title_alternatives[{index}]"
-        if title.strip().lower() == draft.title.strip().lower():
-            errors.append(f"title: {path} repeats the current title")
-        if _caps_ratio(title) > 0.6 and len(title) > 8:
-            errors.append(f"title: {path} is mostly capitals")
-        if MARKUP.search(title) or title.count("!") > 1 or overconfident(title):
-            errors.append(f"title: {path} has markup, repeated exclamation marks or over-confident wording")
-        words = set(title_words(title))
-        if len(original_words) >= 2 and len(words & context_words) < max(1, round(0.4 * len(original_words))):
-            errors.append(f"title: {path} drifts away from the draft's own words")
+        errors += [f"title: title_alternatives[{index}] {problem}" for problem in title_problems(item["title"], draft)]
     existing = {t.strip().lower() for t in draft.tags.replace("|", ",").split(",") if t.strip()}
     added = [t.strip().lower().lstrip("#") for t in data["tag_suggestions"]["add"]]
     if len(set(added)) != len(added) or existing & set(added):
@@ -178,6 +189,9 @@ def _loads(text: str) -> object:
         return json.loads(stripped[start:end + 1])
     except json.JSONDecodeError as error:
         raise InvalidRecommendation([f"json: {error.msg} at position {error.pos}"]) from error
+
+
+loads_json = _loads
 
 
 def parse_and_validate(text: str, packet: EvidencePacket) -> dict:
