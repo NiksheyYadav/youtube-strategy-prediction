@@ -121,7 +121,7 @@ def ensure_environment(assume_yes: bool) -> None:
         subprocess.check_call([sys.executable, "-m", "venv", str(VENV)])
     if not deps_up_to_date():
         say("Installing pinned requirements (first run only; this can take a few minutes) ...")
-        subprocess.check_call([str(venv_python()), "-m", "pip", "install", "--disable-pip-version-check", "-r", str(REQUIREMENTS)])
+        subprocess.check_call([str(venv_python()), "-m", "pip", "install", "-q", "--disable-pip-version-check", "-r", str(REQUIREMENTS)])
         MARKER.write_text(requirements_hash())
 
 
