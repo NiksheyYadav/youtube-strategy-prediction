@@ -1,0 +1,29 @@
+name: Keep Render service warm
+
+# Render's free tier spins a service down after ~15 minutes without traffic.
+# GitHub cron is best-effort (runs can be delayed), so ping every 10 minutes.
+# Disable without a code change: repo Settings > Variables > KEEP_WARM_ENABLED = false.
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  ping:
+    if: ${{ vars.KEEP_WARM_ENABLED != 'false' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    env:
+      URL: ${{ vars.KEEP_WARM_URL || 'https://youtube-strategy-predictor.onrender.com' }}
+    steps:
+      - name: Ping health endpoint
+        run: |
+          for attempt in 1 2 3 4; do
+            code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 60 "$URL/_stcore/health" || true)
+            echo "attempt $attempt -> HTTP $code"
+            [ "$code" = "200" ] && exit 0
+            sleep 15
+          done
+          echo "service did not answer 200" && exit 1
