@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import re
+import time
+
 import altair as alt
 import pandas as pd
 import streamlit as st
@@ -21,6 +24,8 @@ from src.insights import (
     time_grid,
     top_keywords,
 )
+
+from src.recommendations import generate_recommendation, resolve_runtime
 
 st.set_page_config(
     page_title="Signal Studio | YouTube Strategy",
@@ -643,6 +648,115 @@ def render_method(bundle: dict[str, object]) -> None:
 
 
 # --------------------------------------------------------------------------- #
+# Tab: AI coach (on-device language model with an evidence-checked, rule-based fallback)
+# --------------------------------------------------------------------------- #
+def esc(value: object) -> str:
+    """Escape Markdown so model-written text is shown as plain text."""
+    return re.sub(r"([\\`*_{}\[\]()#+\-!|>~$<])", r"\\\1", str(value))
+
+
+def get_runtime():
+    """Probe the local model server at most every 45 s per session."""
+    cached = st.session_state.get("runtime_cache")
+    if cached is None or time.time() - cached[0] > 45:
+        cached = (time.time(), resolve_runtime())
+        st.session_state["runtime_cache"] = cached
+    return cached[1]
+
+
+def _cites(evidence: list[str]) -> str:
+    return " · evidence " + ", ".join(evidence) if evidence else ""
+
+
+def render_coach(bundle: dict[str, object], draft: Draft) -> None:
+    kicker("AI COACH · ON-DEVICE")
+    st.markdown(
+        "<p class='muted'>Turns the model's numbers and dataset evidence into a few prioritised, explained suggestions. "
+        "The language model only writes advice; every number you see comes from the trained ML model.</p>",
+        unsafe_allow_html=True,
+    )
+    runtime = get_runtime()
+    st.caption(f"This device: {runtime.profile.describe()}")
+    if runtime.ready:
+        st.success(f"Local model **{runtime.choice.name}** via {runtime.backend} ({runtime.choice.reason}). "
+                   "Your draft is processed on this computer and is not sent to any online service.")
+    else:
+        hint = f" To enable the AI coach on this device: install Ollama and run `{runtime.choice.pull_hint}`." if runtime.choice.pull_hint else ""
+        st.info(f"Rule-based mode: {runtime.choice.reason}.{hint} Nothing leaves the app in this mode.")
+    if not draft.title.strip():
+        st.info("Enter a title in the Forecast studio first.")
+        return
+
+    if st.button("Generate recommendations", key="coach_generate", width="stretch"):
+        try:
+            index = get_similarity_index()
+        except FileNotFoundError:
+            index = None
+        with st.spinner("Collecting evidence and writing recommendations…"):
+            st.session_state["coach_result"] = (draft, generate_recommendation(bundle, draft, runtime=runtime, similarity_index=index))
+    stored = st.session_state.get("coach_result")
+    if not stored:
+        return
+    shown_draft, result = stored
+    if shown_draft != draft:
+        st.caption("Your draft changed since these were generated. Press the button to refresh.")
+    recommendation = result.recommendation
+
+    if result.source == "llm":
+        st.markdown(f"**AI coach** · local model `{esc(result.model)}` · {result.seconds:.0f}s · every claim checked against the evidence")
+    else:
+        st.markdown("**Rule-based recommendations** · computed directly from the model's scored edits")
+    if result.notice:
+        st.warning(result.notice)
+    first, second = st.columns(2)
+    first.metric("Expected views (ML model)", compact_number(result.forecast.expected_views))
+    second.metric("Expected engagement (ML model)", as_percent(result.forecast.engagement_rate))
+    st.caption("These numbers come from the trained Random Forest and are never changed by the language model.")
+
+    st.markdown(esc(recommendation["summary"]))
+    kicker("TOP PRIORITIES")
+    for number, item in enumerate(recommendation["priorities"], start=1):
+        st.markdown(f"**{number}. {esc(item['action'])}** · confidence {item['confidence']}{_cites(item['evidence'])}")
+        st.caption(item["why"])
+    if recommendation["weaknesses"]:
+        kicker("POSSIBLE WEAKNESSES")
+        for item in recommendation["weaknesses"]:
+            st.markdown(f"**{esc(item['field']).capitalize()}**: {esc(item['issue'])}{_cites(item['evidence'])}")
+            st.caption(item["why"])
+
+    kicker("TITLE AND TAG IDEAS · RE-SCORED BY THE ML MODEL")
+    if not result.rescored:
+        st.caption("No title or tag change passed the evidence checks.")
+    for position, row in enumerate(result.rescored):
+        text, action = st.columns([5, 1])
+        with text:
+            st.markdown(f"**{esc(row['label'])}**")
+            st.caption(f"Model-scored: views {row['views_change_pct']:+.1f}% → {compact_number(row['expected_views'])}, "
+                       f"engagement {row['engagement_change_pp']:+.2f} pp (an association, not a guarantee)")
+        with action:
+            st.button("Apply", key=f"coach_apply_{position}", on_click=apply_draft, args=(row["draft"],))
+    tags = recommendation["tag_suggestions"]
+    if tags["add"]:
+        st.markdown("**Suggested tags:** " + ", ".join(f"`{esc(tag)}`" for tag in tags["add"]))
+        st.caption(tags["rationale"])
+    if recommendation["description_advice"]:
+        kicker("DESCRIPTION")
+        for item in recommendation["description_advice"]:
+            st.markdown(f"**{esc(item['change'])}**{_cites(item['evidence'])}")
+            st.caption(item["why"])
+    advice = recommendation["timing_category_advice"]
+    if advice["advice"]:
+        kicker("TIMING")
+        st.markdown(esc(advice["advice"]) + _cites(advice["evidence"]))
+    kicker("LIMITS")
+    for limitation in recommendation["limitations"]:
+        st.caption(limitation)
+    with st.expander("Evidence the recommendations may cite"):
+        for fact in result.packet.facts:
+            st.markdown(f"**{fact.id}** · {fact.kind}: {esc(fact.text)}")
+
+
+# --------------------------------------------------------------------------- #
 # Main
 # --------------------------------------------------------------------------- #
 def main() -> None:
@@ -679,10 +793,10 @@ def main() -> None:
         st.write(f"Views R² **{metrics['views_log']['five_fold_cv']['r2_mean']:.2f}** · engagement R² "
                  f"**{metrics['engagement_rate']['five_fold_cv']['r2_mean']:.2f}** (5-fold CV)")
         st.info("No likes, comments, views, channel information or thumbnail data are used as inputs.")
-        st.caption("Flow for the demo: Forecast → Why → Best time → Title lab → Similar videos → Scenario lab.")
+        st.caption("Flow for the demo: Forecast → Why → Best time → Title lab → AI coach → Similar videos → Scenario lab.")
 
-    studio, timing, lab, similar, scenario, method = st.tabs(
-        ["Forecast studio", "Best time", "Title lab", "Similar videos", "Scenario lab", "Model brief"]
+    studio, timing, lab, coach, similar, scenario, method = st.tabs(
+        ["Forecast studio", "Best time", "Title lab", "AI coach", "Similar videos", "Scenario lab", "Model brief"]
     )
 
     with studio:
@@ -699,6 +813,8 @@ def main() -> None:
         render_best_time(bundle, draft)
     with lab:
         render_title_lab(bundle, draft)
+    with coach:
+        render_coach(bundle, draft)
     with similar:
         render_similar(bundle, draft)
     with scenario:
