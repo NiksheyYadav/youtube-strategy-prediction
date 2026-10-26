@@ -39,16 +39,9 @@ draft -> ML forecast (untouched) -> evidence packet (ID-tagged facts) -> local m
 - **On-device and private:** talks only to a loopback server (Ollama or any OpenAI-compatible local server); no API key, no online service. Prompts and answers are never logged.
 - **Device-aware:** the app detects RAM, CPU threads and NVIDIA VRAM and picks the best *installed* model that suits it (about 7B on an 8 GB GPU such as an RTX 5050 laptop, 3B on a 16 GB CPU-only laptop, 1.5B on 8 GB RAM, rule-based below that). Nothing is downloaded automatically.
 
-Enable it on a machine:
+The launcher (above) installs Ollama and pulls the models for your device; or do it by hand with `ollama pull qwen2.5:7b` (8 GB GPU; RTX 50-series needs a recent Ollama and NVIDIA driver) or `ollama pull qwen2.5:3b` (CPU laptop).
 
-```powershell
-# install Ollama (https://ollama.com), then pull the model the AI coach tab recommends for this device, e.g.
-ollama pull qwen2.5:7b     # 8 GB NVIDIA GPU (RTX 50-series needs a recent Ollama + NVIDIA driver)
-ollama pull qwen2.5:3b     # CPU-only laptop with 16 GB RAM
-.un_demo.ps1
-```
-
-Settings are optional environment variables (see `.env.example`). The hosted Render service has no model, so it runs in rule-based mode; run locally to use the language model. Tests use a fake model and need no download; `RUN_LIVE_LLM_TESTS=1 python -m pytest tests/test_llm_live.py -s` checks a real local model.
+Settings are optional environment variables (see `.env.example`). The hosted Render service has no model, so it runs in rule-based mode; run locally to use the language model. There is no fake model anywhere: `tests/test_real_model.py` runs against the real local model whenever Ollama is running and skips otherwise (for example on GitHub Actions).
 
 ## Verified results
 
@@ -72,14 +65,29 @@ A views forecast is typically within ×0.29 to ×3.5 of the truth — wide, whic
 
 Views, likes, dislikes, comment count, channel details and video ID are never model inputs (likes + comments are used only to build the engagement *target*). Training and the live app call the **same** feature function (`build_demo_features`), and a test asserts the schema and the exclusion list.
 
-## Run it
+## Run it on any device (one command)
+
+Needs only Python 3.10+ and git. The launcher creates `venv`, installs the pinned requirements, detects your hardware, installs and starts [Ollama](https://ollama.com), downloads the right language models (asking first), then starts the app at http://localhost:8501.
 
 ```powershell
-cd C:\youtube-strategy-prediction
-python -m venv venv
-.\venv\Scripts\python.exe -m pip install -r requirements.txt
-.\run_demo.ps1            # http://localhost:8501
+git clone https://github.com/NiksheyYadav/youtube-strategy-prediction.git
+cd youtube-strategy-prediction
+.\run.ps1            # Windows (or double-click run.bat)
+./run.sh             # macOS / Linux
 ```
+
+Flags: `-Yes` / `--yes` accept every install and download without asking, `-Check` / `--check` preview the plan and change nothing, `-NoLlm` / `--no-llm` skip the language model (rule-based advice), `-Port N` / `--port N`.
+
+| Device | Model the launcher plans |
+| --- | --- |
+| NVIDIA GPU with 8 GB VRAM (e.g. RTX 5050 laptop) | `qwen2.5:7b` (~4.7 GB) + lite fallback |
+| CPU only, 12 GB+ RAM | `qwen2.5:3b` (~1.9 GB) + lite fallback |
+| CPU only, 6-12 GB RAM | `qwen2.5:1.5b` (~1.0 GB) + lite fallback |
+| Under 6 GB RAM | none: rule-based advice |
+
+The lite fallback is `qwen2.5:0.5b` (~0.4 GB). A literal million-parameter model cannot follow the JSON format, so 0.5B is the smallest practical choice. The chain is: main model, then lite model, then the rule-based recommender, so the AI coach always answers.
+
+Manual setup (if you prefer): `python -m venv venv`, install `requirements-app.txt`, then `streamlit run app.py`.
 
 Regenerate everything (needs the Kaggle files in `data/`):
 
