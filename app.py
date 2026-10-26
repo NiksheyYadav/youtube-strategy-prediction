@@ -33,7 +33,7 @@ TEAL, CORAL, SAND, INK = "#00BFA6", "#FF725E", "#F4EEE5", "#071116"
 
 EXAMPLES: dict[str, dict[str, object]] = {
     "Education tutorial": {
-        "title": "How to build a study routine that actually works",
+        "title": "5 Study Tips That Actually Work for Students",
         "category": "Education", "day": 5, "hour": 18,
         "tags": "study tips, productivity, student life, exam preparation",
         "description": "A practical guide for students who want a repeatable study routine. Share your own routine in the comments.",
@@ -361,7 +361,7 @@ def render_forecast(bundle: dict[str, object], draft: Draft) -> None:
     kicker("KEYWORD RADAR")
     keywords = keyword_signals(bundle, draft.title)
     if keywords.empty:
-        st.caption("None of the title words appears in enough trending videos (25+) for a reliable keyword statistic.")
+        st.caption("None of the title words is common enough for a reliable statistic (a word needs 25+ videos from 25+ different channels).")
     else:
         shown = keywords.assign(
             **{"Videos": keywords["n"], "Median views": keywords["median_views"].map(compact_number),

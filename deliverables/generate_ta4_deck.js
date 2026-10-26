@@ -421,11 +421,12 @@ function numberedCard(slide, n, heading, body, x, y, w, h, accent, dark = false)
   const close = [
     ['DATA', '16,307 unique videos'],
     ['MODEL', 'Random Forest + calibrated intervals'],
-    ['DEMO', 'Explain, time, edit, compare']
+    ['DEMO', 'Explain, time, edit, compare'],
+    ['LIVE', 'youtube-strategy-predictor.onrender.com']
   ];
   close.forEach((c, i) => {
-    text(slide, c[0], 9.03, 2.0 + i * 0.92, 1.0, 0.16, { fontSize: 9.5, color: [C.mint, C.gold, C.coral][i], bold: true, charSpacing: 0.9 });
-    text(slide, c[1], 9.03, 2.28 + i * 0.92, 2.5, 0.22, { fontSize: 13, color: C.white, bold: true });
+    text(slide, c[0], 9.03, 1.85 + i * 0.82, 1.0, 0.16, { fontSize: 9.5, color: [C.mint, C.gold, C.coral, C.blue][i], bold: true, charSpacing: 0.9 });
+    text(slide, c[1], 9.03, 2.13 + i * 0.82, 2.95, 0.22, { fontSize: i === 3 ? 10.2 : 13, color: C.white, bold: true });
   });
   text(slide, 'Thank you', 0.72, 5.48, 3.1, 0.36, { fontFace: 'Georgia', fontSize: 20, color: C.gold, bold: true });
   text(slide, 'Questions, model walkthrough, or live demo?', 0.72, 5.96, 6.1, 0.26, { fontSize: 14, color: C.pale });

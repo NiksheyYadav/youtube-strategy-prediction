@@ -4,6 +4,9 @@ An AI/ML project that forecasts the **relative views** and **engagement rate** o
 
 It uses only information a creator controls before upload: title, tags, description, category, and publish time (IST). Data: the India subset of Kaggle's *Trending YouTube Video Statistics* (37,352 daily snapshots → **16,307 unique videos** after keeping each video's latest snapshot).
 
+**Live demo:** https://youtube-strategy-predictor.onrender.com  
+*(Render free tier: the service sleeps after ~15 minutes idle, so the first load can take 30-60 seconds. Open it a minute before presenting.)*
+
 > **Scope.** The data contains only videos that already trended, so this is a regression on *relative performance among trending videos*. It does not classify an arbitrary upload as viral / not viral.
 
 ## What the app does
@@ -71,6 +74,8 @@ Regenerate everything (needs the Kaggle files in `data/`):
 Covers feature correctness (regression tests for hashtag/link/tag-quote bugs), schema/leakage, Shapley axioms (efficiency), interval coverage, similarity search, and **headless end-to-end runs of the Streamlit app** (every tab, example drafts, apply buttons, blank-title handling). The same suite runs in GitHub Actions on every push.
 
 ## Deployment
+
+Deployed on Render (Singapore, free plan) from this repository's `main` branch with auto-deploy on every push: https://youtube-strategy-predictor.onrender.com. GitHub Actions runs the test suite on every push.
 
 `render.yaml` (Render Blueprint), `Dockerfile` and `requirements-app.txt` define one Streamlit web service with a health check at `/_stcore/health`. The deployed image contains only `app.py`, `src/`, and two model files (`models/advanced_model_bundle.joblib`, `models/similarity_index.joblib`); the raw Kaggle data is not needed to serve predictions.
 

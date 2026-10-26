@@ -1,5 +1,7 @@
 # 4-Minute Live Demo Script
 
+**Before you start:** open https://youtube-strategy-predictor.onrender.com a minute early (free hosting sleeps when idle) or run `.\run_demo.ps1` locally.
+
 1. **Frame it.** "This app gives a pre-publication forecast. It only sees what a creator controls before uploading, and it tells you how sure it is."
 2. **Sidebar.** Pick *Music video* or *Tech review* under **Try an example** and press **Load example**. Mention the 16,307 unique India-trending videos and the R² figures.
 3. **Forecast studio.** Press **Generate pre-publication forecast**. Point to the expected views with the **80 % interval** and say: "We measured that this interval held 79.7 % of the time on later uploads." Show the percentile card ("higher than X % of trending videos").
