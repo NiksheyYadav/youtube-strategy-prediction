@@ -1,0 +1,763 @@
+{
+ "education": {
+  "best_slots": [
+   [
+    "Sunday",
+    0,
+    86505.2006408829
+   ],
+   [
+    "Saturday",
+    0,
+    85946.3223495815
+   ],
+   [
+    "Friday",
+    0,
+    85090.3873439479
+   ]
+  ],
+  "category_top3": [
+   [
+    "Music",
+    867567.5072511487
+   ],
+   [
+    "Film & Animation",
+    318440.5310266807
+   ],
+   [
+    "Comedy",
+    249094.3191299719
+   ]
+  ],
+  "percentiles": {
+   "category_n": 797,
+   "engagement_category": 33.5006273526,
+   "engagement_overall": 88.3792236463,
+   "views_category": 80.5520702635,
+   "views_overall": 6.2304531796
+  },
+  "prediction": {
+   "engagement_ci_high": 0.0802057306,
+   "engagement_ci_low": 0.0135283324,
+   "engagement_rate": 0.0468670315,
+   "expected_views": 78139.3236733218,
+   "out_of_range_features": [
+    "title_how_to_words"
+   ],
+   "views_ci_high": 271545.2309367675,
+   "views_ci_low": 22484.7114116724,
+   "views_log": 11.2662615108,
+   "views_tree_high": 195908.7617739532,
+   "views_tree_low": 36126.8351275365
+  },
+  "shapley": {
+   "baseline_views": 234028.1504992937,
+   "effects": {
+    "Category": [
+     0.329141048,
+     2.2309772493
+    ],
+    "Description": [
+     0.9011877413,
+     -1.2009389717
+    ],
+    "Publish timing": [
+     0.9781947854,
+     0.3842284947
+    ],
+    "Tags": [
+     0.8730669979,
+     0.0586952869
+    ],
+    "Title packaging": [
+     1.318059486,
+     0.7671072253
+    ]
+   },
+   "forecast_views": 78139.3236733218
+  },
+  "top_edits": [
+   [
+    "how_to",
+    15.988388736,
+    -0.2980546988
+   ],
+   [
+    "hashtags",
+    0.596205044,
+    0.2576522112
+   ],
+   [
+    "sentence_case",
+    -0.1324083921,
+    -0.4909644833
+   ],
+   [
+    "title_case",
+    -0.7573827443,
+    0.0594190383
+   ],
+   [
+    "link",
+    -5.2608041609,
+    0.5646293445
+   ]
+  ]
+ },
+ "long_caps": {
+  "best_slots": [
+   [
+    "Monday",
+    1,
+    329915.7291809235
+   ],
+   [
+    "Tuesday",
+    1,
+    328028.808720002
+   ],
+   [
+    "Saturday",
+    1,
+    325783.2905900955
+   ]
+  ],
+  "category_top3": [
+   [
+    "Film & Animation",
+    871986.7510029472
+   ],
+   [
+    "Sports",
+    388287.8525364219
+   ],
+   [
+    "Music",
+    378644.491949991
+   ]
+  ],
+  "percentiles": {
+   "category_n": 2505,
+   "engagement_category": 96.0878243513,
+   "engagement_overall": 77.1693137916,
+   "views_category": 89.3013972056,
+   "views_overall": 60.7775801803
+  },
+  "prediction": {
+   "engagement_ci_high": 0.0448557844,
+   "engagement_ci_low": 0.0075658429,
+   "engagement_rate": 0.0262108137,
+   "expected_views": 241351.7532355434,
+   "out_of_range_features": [
+    "caps_ratio",
+    "description_length",
+    "description_word_count",
+    "publish_hour",
+    "tag_avg_length",
+    "tag_total_characters",
+    "title_lexical_diversity",
+    "title_word_count"
+   ],
+   "views_ci_high": 838726.3994578974,
+   "views_ci_low": 69450.8284868566,
+   "views_log": 12.3940148487,
+   "views_tree_high": 1172051.7422424203,
+   "views_tree_low": 59175.2675273192
+  },
+  "shapley": {
+   "baseline_views": 234028.1504992937,
+   "effects": {
+    "Category": [
+     0.8257022863,
+     -0.8025601252
+    ],
+    "Description": [
+     1.1140489745,
+     -0.2839090054
+    ],
+    "Publish timing": [
+     1.0998484925,
+     0.0438798068
+    ],
+    "Tags": [
+     0.9891788058,
+     0.40488086
+    ],
+    "Title packaging": [
+     1.0304973148,
+     0.8121559639
+    ]
+   },
+   "forecast_views": 241351.7532355439
+  },
+  "top_edits": [
+   [
+    "urgency",
+    13.2872510489,
+    -0.0897838209
+   ],
+   [
+    "number",
+    10.8707625582,
+    0.0965251463
+   ],
+   [
+    "shorten",
+    10.0767172776,
+    0.9619516526
+   ],
+   [
+    "question",
+    9.9721493062,
+    -0.0215567054
+   ],
+   [
+    "exclaim",
+    5.2795915038,
+    -0.1105267978
+   ]
+  ]
+ },
+ "music": {
+  "best_slots": [
+   [
+    "Monday",
+    22,
+    1162038.2456824903
+   ],
+   [
+    "Wednesday",
+    22,
+    1157481.4246032145
+   ],
+   [
+    "Tuesday",
+    22,
+    1152479.0039849768
+   ]
+  ],
+  "category_top3": [
+   [
+    "Music",
+    1044433.912445627
+   ],
+   [
+    "Film & Animation",
+    225368.2970358145
+   ],
+   [
+    "Science & Technology",
+    206250.9177596197
+   ]
+  ],
+  "percentiles": {
+   "category_n": 1213,
+   "engagement_category": 94.2291838417,
+   "engagement_overall": 83.7493101122,
+   "views_category": 78.0708985985,
+   "views_overall": 95.4988655179
+  },
+  "prediction": {
+   "engagement_ci_high": 0.0619013398,
+   "engagement_ci_low": 0.0104409235,
+   "engagement_rate": 0.0361711316,
+   "expected_views": 1044433.912445627,
+   "out_of_range_features": [],
+   "views_ci_high": 3629525.3520928076,
+   "views_ci_low": 300546.2837265163,
+   "views_log": 13.8589865435,
+   "views_tree_high": 5737689.229789836,
+   "views_tree_low": 167262.8137624816
+  },
+  "shapley": {
+   "baseline_views": 234028.1504992937,
+   "effects": {
+    "Category": [
+     2.7218344401,
+     -0.0057846682
+    ],
+    "Description": [
+     0.8156498734,
+     -0.8704004947
+    ],
+    "Publish timing": [
+     0.9668079225,
+     -0.0476133642
+    ],
+    "Tags": [
+     1.0715393765,
+     0.6817294645
+    ],
+    "Title packaging": [
+     1.9404283483,
+     1.41254836
+    ]
+   },
+   "forecast_views": 1044433.9124456214
+  },
+  "top_edits": [
+   [
+    "tag_keywords",
+    17.2009035932,
+    0.1961684279
+   ],
+   [
+    "question",
+    16.7389102702,
+    -0.0418948482
+   ],
+   [
+    "exclaim",
+    13.1312585272,
+    -0.0418948482
+   ],
+   [
+    "hashtags",
+    -2.8376724155,
+    1.5489600736
+   ],
+   [
+    "number",
+    -11.0380285549,
+    -0.8901826484
+   ]
+  ]
+ },
+ "no_tags_short": {
+  "best_slots": [
+   [
+    "Wednesday",
+    1,
+    436888.2221383164
+   ],
+   [
+    "Saturday",
+    1,
+    436361.1151319494
+   ],
+   [
+    "Sunday",
+    1,
+    436361.1151319494
+   ]
+  ],
+  "category_top3": [
+   [
+    "Music",
+    1045629.7717586771
+   ],
+   [
+    "Film & Animation",
+    373806.7706984784
+   ],
+   [
+    "Science & Technology",
+    370612.9758372432
+   ]
+  ],
+  "percentiles": {
+   "category_n": 1114,
+   "engagement_category": 57.0017953321,
+   "engagement_overall": 90.7217759244,
+   "views_category": 59.8743267504,
+   "views_overall": 76.1574783835
+  },
+  "prediction": {
+   "engagement_ci_high": 0.0925103889,
+   "engagement_ci_low": 0.015603764,
+   "engagement_rate": 0.0540570764,
+   "expected_views": 348996.3909106093,
+   "out_of_range_features": [
+    "description_length",
+    "description_word_count",
+    "tag_avg_length",
+    "tag_count",
+    "tag_total_characters",
+    "title_length"
+   ],
+   "views_ci_high": 1212803.3710791168,
+   "views_ci_low": 100426.7208813482,
+   "views_log": 12.7628197253,
+   "views_tree_high": 2392605.5994820283,
+   "views_tree_low": 84665.7967824494
+  },
+  "shapley": {
+   "baseline_views": 234028.1504992937,
+   "effects": {
+    "Category": [
+     1.0409075806,
+     1.4697096673
+    ],
+    "Description": [
+     0.5655016809,
+     -1.1222982609
+    ],
+    "Publish timing": [
+     1.3452895931,
+     -0.2793552105
+    ],
+    "Tags": [
+     1.1613319324,
+     0.1419044478
+    ],
+    "Title packaging": [
+     1.6215636569,
+     2.7491131328
+    ]
+   },
+   "forecast_views": 348996.3909106093
+  },
+  "top_edits": [
+   [
+    "link",
+    28.3547460327,
+    0.0256714356
+   ],
+   [
+    "cta",
+    2.4464506462,
+    0.0350707098
+   ],
+   [
+    "number",
+    -3.0246053923,
+    -0.2554324973
+   ],
+   [
+    "urgency",
+    -8.8797087645,
+    -0.7789402413
+   ],
+   [
+    "exclaim",
+    -11.0592714228,
+    0.1003560725
+   ]
+  ]
+ },
+ "non_ascii": {
+  "best_slots": [
+   [
+    "Wednesday",
+    9,
+    135228.3550942374
+   ],
+   [
+    "Tuesday",
+    9,
+    134197.5184879952
+   ],
+   [
+    "Monday",
+    9,
+    134197.5184879952
+   ]
+  ],
+  "category_top3": [
+   [
+    "Music",
+    250623.2363498877
+   ],
+   [
+    "Film & Animation",
+    175238.1813408964
+   ],
+   [
+    "Sports",
+    155707.0417705394
+   ]
+  ],
+  "percentiles": {
+   "category_n": 797,
+   "engagement_category": 24.7176913425,
+   "engagement_overall": 84.4422640584,
+   "views_category": 94.3538268507,
+   "views_overall": 18.0045379285
+  },
+  "prediction": {
+   "engagement_ci_high": 0.0642774898,
+   "engagement_ci_low": 0.0108417097,
+   "engagement_rate": 0.0375595998,
+   "expected_views": 132754.9357312144,
+   "out_of_range_features": [
+    "description_length",
+    "description_word_count",
+    "tag_total_characters",
+    "title_avg_word_length",
+    "title_length"
+   ],
+   "views_ci_high": 461340.4980593788,
+   "views_ci_low": 38200.9361926161,
+   "views_log": 11.7962676517,
+   "views_tree_high": 308115.9983837207,
+   "views_tree_low": 60857.2242233366
+  },
+  "shapley": {
+   "baseline_views": 234028.1504992937,
+   "effects": {
+    "Category": [
+     0.4706383081,
+     2.2596586113
+    ],
+    "Description": [
+     0.7748000677,
+     -1.3024482709
+    ],
+    "Publish timing": [
+     1.0376162484,
+     -0.5422037748
+    ],
+    "Tags": [
+     0.9185437387,
+     0.1256552304
+    ],
+    "Title packaging": [
+     1.6321890612,
+     0.7686643127
+    ]
+   },
+   "forecast_views": 132754.9357312141
+  },
+  "top_edits": [
+   [
+    "cta",
+    18.6135154466,
+    -0.1307354439
+   ],
+   [
+    "link",
+    7.6424058893,
+    -0.0427164223
+   ],
+   [
+    "how_to",
+    -10.8048799146,
+    0.0992066672
+   ],
+   [
+    "question",
+    -13.3777195079,
+    0.1279685201
+   ],
+   [
+    "exclaim",
+    -13.3777195079,
+    -0.0068618712
+   ]
+  ]
+ },
+ "tech": {
+  "best_slots": [
+   [
+    "Monday",
+    2,
+    314058.2448859563
+   ],
+   [
+    "Tuesday",
+    2,
+    308000.9519603233
+   ],
+   [
+    "Wednesday",
+    2,
+    306835.5648641714
+   ]
+  ],
+  "category_top3": [
+   [
+    "Music",
+    553620.4637345253
+   ],
+   [
+    "Film & Animation",
+    405964.0503515824
+   ],
+   [
+    "Comedy",
+    290479.0683649161
+   ]
+  ],
+  "percentiles": {
+   "category_n": 300,
+   "engagement_category": 3.0,
+   "engagement_overall": 73.1465015024,
+   "views_category": 61.6666666667,
+   "views_overall": 69.0071748329
+  },
+  "prediction": {
+   "engagement_ci_high": 0.039513814,
+   "engagement_ci_low": 0.0066648107,
+   "engagement_rate": 0.0230893124,
+   "expected_views": 282977.287132673,
+   "out_of_range_features": [],
+   "views_ci_high": 983379.7142784407,
+   "views_ci_low": 81429.019753131,
+   "views_log": 12.5531254498,
+   "views_tree_high": 599808.716170262,
+   "views_tree_low": 152835.4949189778
+  },
+  "shapley": {
+   "baseline_views": 234028.1504992937,
+   "effects": {
+    "Category": [
+     1.0537413363,
+     2.1591461423
+    ],
+    "Description": [
+     0.9841634951,
+     -2.9224103169
+    ],
+    "Publish timing": [
+     1.0108647988,
+     -0.0007133893
+    ],
+    "Tags": [
+     0.9272761123,
+     0.2942215738
+    ],
+    "Title packaging": [
+     1.2438836028,
+     0.3320533598
+    ]
+   },
+   "forecast_views": 282977.287132673
+  },
+  "top_edits": [
+   [
+    "exclaim",
+    6.9528611791,
+    -0.0654903785
+   ],
+   [
+    "question",
+    0.9841554645,
+    -0.0612256877
+   ],
+   [
+    "tag_keywords",
+    -2.039833859,
+    -0.72462004
+   ],
+   [
+    "cta",
+    -3.8172445489,
+    0.0805778598
+   ],
+   [
+    "link",
+    -5.9560403285,
+    0.1968639531
+   ]
+  ]
+ },
+ "trailer": {
+  "best_slots": [
+   [
+    "Monday",
+    1,
+    226681.9226269225
+   ],
+   [
+    "Tuesday",
+    1,
+    225877.8252384418
+   ],
+   [
+    "Wednesday",
+    1,
+    223997.9490037287
+   ]
+  ],
+  "category_top3": [
+   [
+    "Music",
+    703982.206452808
+   ],
+   [
+    "Film & Animation",
+    443016.5890081883
+   ],
+   [
+    "Sports",
+    231251.0424005727
+   ]
+  ],
+  "percentiles": {
+   "category_n": 7548,
+   "engagement_category": 77.3714891362,
+   "engagement_overall": 64.181026553,
+   "views_category": 39.7456279809,
+   "views_overall": 41.7244128288
+  },
+  "prediction": {
+   "engagement_ci_high": 0.0296438188,
+   "engagement_ci_low": 0.0050000347,
+   "engagement_rate": 0.0173219267,
+   "expected_views": 187477.8495141628,
+   "out_of_range_features": [
+    "description_length"
+   ],
+   "views_ci_high": 651508.650494492,
+   "views_ci_low": 53948.0381891914,
+   "views_log": 12.1414213154,
+   "views_tree_high": 499357.3265733985,
+   "views_tree_low": 65586.4102221224
+  },
+  "shapley": {
+   "baseline_views": 234028.1504992937,
+   "effects": {
+    "Category": [
+     0.9969454765,
+     -0.4886832242
+    ],
+    "Description": [
+     0.7406641159,
+     -1.2637421974
+    ],
+    "Publish timing": [
+     1.0126416822,
+     -0.1116989175
+    ],
+    "Tags": [
+     0.8907560306,
+     0.3519197319
+    ],
+    "Title packaging": [
+     1.2027491016,
+     0.7977634131
+    ]
+   },
+   "forecast_views": 187477.8495141642
+  },
+  "top_edits": [
+   [
+    "number",
+    27.7997677177,
+    0.2082467451
+   ],
+   [
+    "link",
+    16.0473678004,
+    1.534551684
+   ],
+   [
+    "exclaim",
+    7.5305034896,
+    -0.021739863
+   ],
+   [
+    "tag_keywords",
+    3.8204572646,
+    0.1245642225
+   ],
+   [
+    "question",
+    -1.0633382335,
+    -0.0182042541
+   ]
+  ]
+ }
+}

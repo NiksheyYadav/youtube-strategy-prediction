@@ -11,3 +11,10 @@ data/
 logs/
 .pytest_cache/
 .vscode/
+# Secrets and local LLM configuration must never be committed
+.env
+.env.*
+!.env.example
+.streamlit/secrets.toml
+*.key
+*.pem
