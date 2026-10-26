@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from src.advanced_model import normalise_tags
 from src.reco_evidence import DATASET_LIMIT, EvidencePacket
+from src.reco_schema import _caps_ratio
 
 EDITABLE_GROUPS = {"Title packaging": "title", "Tags": "tags", "Description": "description"}
 FIELD_BY_PREFIX = (("tag_", "tags"), ("description_", "description"), ("publish_", "timing"), ("is_weekend", "timing"))
@@ -52,7 +53,8 @@ def rules_recommendation(packet: EvidencePacket) -> dict:
 
     title_alternatives = [
         {"title": fact.data["draft"].title, "rationale": f"{fact.data['why']} (model-scored edit)", "evidence": [fact.id]}
-        for fact in ups if fact.data["field"] == "title" and len(fact.data["draft"].title) <= 100  # YouTube's title limit
+        for fact in ups if fact.data["field"] == "title" and len(fact.data["draft"].title) <= 100  # YouTube title limit
+        and _caps_ratio(fact.data["draft"].title) <= 0.6  # never endorse shouting
     ][:3]
     description_advice = [
         {"change": fact.data["label"], "why": fact.text, "evidence": [fact.id]}
