@@ -1,0 +1,13 @@
+{
+  "coverage_target": 0.8,
+  "views_log_q": 1.245626172729926,
+  "engagement_q": 0.7113465065225083,
+  "views_multiplier_low": 0.28776066382419274,
+  "views_multiplier_high": 3.47511013739859,
+  "coverage_check": {
+    "views_out_of_fold": 0.800085852701294,
+    "engagement_out_of_fold": 0.800085852701294,
+    "views_chronological_holdout": 0.7967504598405886,
+    "engagement_chronological_holdout": 0.8087063151440834
+  }
+}

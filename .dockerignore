@@ -1,0 +1,14 @@
+.git
+.github
+.vscode
+venv
+logs
+__pycache__
+*.pyc
+data
+deliverables
+scripts
+tests
+reports
+models/*.pkl
+.pytest_cache

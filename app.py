@@ -1,0 +1,711 @@
+"""Signal Studio - explainable pre-publication forecasts for YouTube content strategy."""
+
+from __future__ import annotations
+
+import altair as alt
+import pandas as pd
+import streamlit as st
+
+from src.inference import global_feature_groups, load_bundle, predict_video
+from src.insights import (
+    DAYS,
+    Draft,
+    build_brief_markdown,
+    category_what_if,
+    explain_groups,
+    forecast_percentile,
+    keyword_signals,
+    load_similarity_index,
+    similar_videos,
+    suggest_edits,
+    time_grid,
+    top_keywords,
+)
+
+st.set_page_config(
+    page_title="Signal Studio | YouTube Strategy",
+    page_icon="▶",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
+
+TEAL, CORAL, SAND, INK = "#00BFA6", "#FF725E", "#F4EEE5", "#071116"
+
+EXAMPLES: dict[str, dict[str, object]] = {
+    "Education tutorial": {
+        "title": "How to build a study routine that actually works",
+        "category": "Education", "day": 5, "hour": 18,
+        "tags": "study tips, productivity, student life, exam preparation",
+        "description": "A practical guide for students who want a repeatable study routine. Share your own routine in the comments.",
+    },
+    "Music video": {
+        "title": "Neon Nights (Official Music Video)",
+        "category": "Music", "day": 4, "hour": 17,
+        "tags": "new song, official video, music video, hindi song",
+        "description": "Official music video. Stream the song everywhere. Subscribe for new releases. https://example.com/stream",
+    },
+    "Tech review": {
+        "title": "5 Things I Wish I Knew Before Buying This Phone",
+        "category": "Science & Technology", "day": 2, "hour": 19,
+        "tags": "phone review, smartphone, tech review, buying guide",
+        "description": "An honest review after 30 days of use. Which features matter and which are marketing? Tell me what you use your phone for in the comments. #review #tech",
+    },
+    "Movie trailer": {
+        "title": "Official Trailer | Releasing This Friday",
+        "category": "Entertainment", "day": 0, "hour": 12,
+        "tags": "trailer, official trailer, movie, new movie",
+        "description": "Watch the official trailer. In cinemas this Friday. #trailer #movie",
+    },
+}
+
+
+# --------------------------------------------------------------------------- #
+# Style
+# --------------------------------------------------------------------------- #
+def apply_style() -> None:
+    st.markdown(
+        """
+        <style>
+        .stApp {
+            background:
+                radial-gradient(circle at 86% 2%, rgba(255,114,94,.16), transparent 25rem),
+                radial-gradient(circle at 8% 22%, rgba(0,191,166,.12), transparent 28rem),
+                #071116;
+        }
+        .stApp, .stApp * { font-family: "Palatino Linotype", "Book Antiqua", Georgia, serif; }
+        .stApp [data-testid="stIconMaterial"], .stApp [class*="material-symbols"] {
+            font-family: "Material Symbols Rounded", "Material Symbols Outlined" !important;
+        }
+        .main .block-container { max-width: 1240px; padding-top: 2.3rem; padding-bottom: 4rem; }
+        [data-testid="stSidebar"] { background: #091A20; border-right: 1px solid rgba(164,208,201,.16); }
+        .masthead { border-bottom: 1px solid rgba(234,245,242,.18); padding: .4rem 0 1.7rem; margin-bottom: 1.1rem; }
+        .eyebrow, .section-kicker { color: #67D8C7; font-family: "Courier New", monospace !important; font-size: .75rem; letter-spacing: .16em; font-weight: 700; margin-top: 1.1rem; }
+        .masthead h1 { font-size: clamp(2.35rem, 5.2vw, 4.8rem); letter-spacing: -.065em; line-height: .94; margin: .45rem 0 .8rem; color: #F4EEE5; }
+        .masthead h1 span { color: #FF8C7B; font-style: italic; font-weight: 400; }
+        .masthead p { color: #B7CFCB; font-size: 1.05rem; max-width: 52rem; margin: 0; }
+        [data-baseweb="tab-list"] { gap: 1.2rem; border-bottom: 1px solid rgba(234,245,242,.14); flex-wrap: wrap; }
+        [data-baseweb="tab"] { background: transparent; color: #A6C1BC; padding: .75rem 0; font-weight: 700; }
+        [aria-selected="true"] { color: #FF9C8C !important; }
+        [data-testid="stMetric"] { background: rgba(15,35,42,.78); border: 1px solid rgba(164,208,201,.18); border-radius: 2px; padding: 1.1rem 1.2rem; }
+        [data-testid="stMetricLabel"] { color: #9FBAB5; }
+        [data-testid="stMetricValue"] { color: #F4EEE5; }
+        .signal-note { border-left: 3px solid #FF725E; background: rgba(255,114,94,.08); color: #D4E2DF; padding: 1rem 1.1rem; min-height: 6.7rem; }
+        .why-note { border-left: 3px solid #00BFA6; background: rgba(0,191,166,.07); color: #D4E2DF; padding: .9rem 1.1rem; margin: .4rem 0 1rem; }
+        .tip { border-top: 1px solid rgba(164,208,201,.13); color: #C8D9D5; padding: .65rem .2rem; font-size: .96rem; }
+        .muted { color: #A9C2BD; margin-top: 0; }
+        .edit-card { border: 1px solid rgba(164,208,201,.16); background: rgba(15,35,42,.55); padding: .8rem 1rem; margin-bottom: .55rem; }
+        .edit-card b { color: #F4EEE5; }
+        .up { color: #4EE0C6; font-weight: 700; } .down { color: #FF8C7B; font-weight: 700; }
+        .stButton > button, [data-testid="stFormSubmitButton"] > button, .stDownloadButton > button {
+            border: 0; border-radius: 0; background: #FF725E; color: #111A1D; font-weight: 800;
+            letter-spacing: .02em; box-shadow: 5px 5px 0 #00BFA6;
+        }
+        .stButton > button:hover, [data-testid="stFormSubmitButton"] > button:hover, .stDownloadButton > button:hover { background: #FFA091; color: #071116; transform: translate(1px, 1px); box-shadow: 3px 3px 0 #00BFA6; }
+        div[data-baseweb="input"] > div, div[data-baseweb="select"] > div, textarea {
+            background: rgba(8,25,30,.9) !important; border-radius: 0 !important; border-color: rgba(164,208,201,.28) !important;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+# --------------------------------------------------------------------------- #
+# Cached model access (the leading underscore tells Streamlit not to hash the bundle)
+# --------------------------------------------------------------------------- #
+@st.cache_resource(show_spinner="Loading the explainable model…")
+def get_bundle() -> dict[str, object]:
+    return load_bundle()
+
+
+@st.cache_resource(show_spinner=False)
+def get_similarity_index() -> dict[str, object]:
+    return load_similarity_index()
+
+
+@st.cache_data(show_spinner=False, max_entries=64)
+def cached_explanation(_bundle, draft: Draft):
+    return explain_groups(_bundle, draft)
+
+
+@st.cache_data(show_spinner=False, max_entries=64)
+def cached_time_grid(_bundle, draft: Draft):
+    return time_grid(_bundle, draft)
+
+
+@st.cache_data(show_spinner=False, max_entries=64)
+def cached_suggestions(_bundle, draft: Draft):
+    return suggest_edits(_bundle, draft)
+
+
+@st.cache_data(show_spinner=False, max_entries=64)
+def cached_categories(_bundle, draft: Draft):
+    return category_what_if(_bundle, draft)
+
+
+# --------------------------------------------------------------------------- #
+# Formatting helpers
+# --------------------------------------------------------------------------- #
+def compact_number(value: float) -> str:
+    if value >= 1_000_000:
+        return f"{value / 1_000_000:.2f}M"
+    if value >= 1_000:
+        return f"{value / 1_000:.1f}K"
+    return f"{value:,.0f}"
+
+
+def as_percent(value: float) -> str:
+    return f"{value * 100:.2f}%"
+
+
+def signed(value: float, suffix: str = "%") -> str:
+    css = "up" if value >= 0 else "down"
+    return f"<span class='{css}'>{value:+.1f}{suffix}</span>"
+
+
+def kicker(text: str) -> None:
+    st.markdown(f"<div class='section-kicker'>{text}</div>", unsafe_allow_html=True)
+
+
+def ordinal(value: float) -> str:
+    number = int(round(value))
+    suffix = "th" if 10 <= number % 100 <= 20 else {1: "st", 2: "nd", 3: "rd"}.get(number % 10, "th")
+    return f"{number}{suffix}"
+
+
+def draft_tips(feature_row: pd.DataFrame, summary: dict[str, dict[str, float]]) -> list[str]:
+    """Describe input position in the training distribution without causal claims."""
+    row = feature_row.iloc[0]
+    tips: list[str] = []
+    if row["description_length"] < summary["description_length"]["p50"]:
+        tips.append("The description is shorter than the training-set median. Try a clear summary and useful context.")
+    if row["tag_count"] < summary["tag_count"]["p50"]:
+        tips.append("The tag count is below the training-set median. Add only relevant, specific tags.")
+    if row["title_length"] > summary["title_length"]["p95"]:
+        tips.append("The title is unusually long for this training sample. Check that the key idea appears early.")
+    if row["caps_ratio"] > summary["caps_ratio"]["p95"]:
+        tips.append("The capitalization level is unusual in the training sample. Review readability before using all caps.")
+    if not tips:
+        tips.append("This draft sits within typical ranges for the main editable metadata fields in the training sample.")
+    return tips[:3]
+
+
+# --------------------------------------------------------------------------- #
+# Session state: one source of truth for the current draft
+# --------------------------------------------------------------------------- #
+def init_state(categories: list[str]) -> None:
+    example = EXAMPLES["Education tutorial"]
+    defaults = {
+        "main_title": example["title"],
+        "main_category": example["category"] if example["category"] in categories else categories[0],
+        "main_day": DAYS[int(example["day"])],
+        "main_hour": int(example["hour"]),
+        "main_tags": example["tags"],
+        "main_description": example["description"],
+    }
+    for key, value in defaults.items():
+        st.session_state.setdefault(key, value)
+    st.session_state.setdefault("proposal", read_form("main"))
+
+
+def read_form(prefix: str) -> dict[str, object]:
+    return {
+        "title": st.session_state[f"{prefix}_title"],
+        "category_name": st.session_state[f"{prefix}_category"],
+        "day_of_week": DAYS.index(st.session_state[f"{prefix}_day"]),
+        "publish_hour": int(st.session_state[f"{prefix}_hour"]),
+        "tags": st.session_state[f"{prefix}_tags"],
+        "description": st.session_state[f"{prefix}_description"],
+    }
+
+
+def load_example(categories: list[str]) -> None:
+    example = EXAMPLES[st.session_state["example_choice"]]
+    st.session_state.update(
+        main_title=example["title"],
+        main_category=example["category"] if example["category"] in categories else categories[0],
+        main_day=DAYS[int(example["day"])],
+        main_hour=int(example["hour"]),
+        main_tags=example["tags"],
+        main_description=example["description"],
+    )
+    st.session_state["proposal"] = read_form("main")
+
+
+def apply_draft(draft: Draft) -> None:
+    """Callback: copy an edited draft back into the main form and make it current."""
+    st.session_state.update(
+        main_title=draft.title,
+        main_category=draft.category_name,
+        main_day=DAYS[draft.day_of_week],
+        main_hour=draft.publish_hour,
+        main_tags=draft.tags,
+        main_description=draft.description,
+    )
+    st.session_state["proposal"] = read_form("main")
+
+
+def proposal_inputs(prefix: str, categories: list[str]) -> dict[str, object]:
+    """Render the proposal form; widget values live in session state under ``prefix``."""
+    st.text_area(
+        "Video title", max_chars=120, height=74, key=f"{prefix}_title",
+        help="Use a real draft title. The model extracts text-style features locally.",
+    )
+    left, right = st.columns(2)
+    with left:
+        st.selectbox("Category", categories, key=f"{prefix}_category")
+        st.selectbox("Publish day (IST)", DAYS, key=f"{prefix}_day")
+    with right:
+        st.slider("Publish hour (IST)", 0, 23, key=f"{prefix}_hour", help="24-hour clock. 18 means 6:00 PM IST.")
+        st.text_input("Tags", key=f"{prefix}_tags", help="Separate tags with commas, semicolons, or vertical bars.")
+    st.text_area("Description", height=104, max_chars=5000, key=f"{prefix}_description")
+    return read_form(prefix)
+
+
+def to_draft(values: dict[str, object]) -> Draft:
+    return Draft(
+        title=str(values["title"]), tags=str(values["tags"]), description=str(values["description"]),
+        category_name=str(values["category_name"]), day_of_week=int(values["day_of_week"]),
+        publish_hour=int(values["publish_hour"]),
+    )
+
+
+# --------------------------------------------------------------------------- #
+# Tab: Forecast studio
+# --------------------------------------------------------------------------- #
+def explanation_chart(table: pd.DataFrame) -> alt.Chart:
+    data = table.assign(change=(table["views_multiplier"] - 1) * 100)
+    data["label"] = data["change"].map(lambda value: f"{value:+.0f}%")
+    base = alt.Chart(data).encode(
+        y=alt.Y("group:N", sort=alt.EncodingSortField("change", order="descending"), title=None),
+        x=alt.X("change:Q", title="Effect on forecast views vs a typical trending video (%)"),
+    )
+    bars = base.mark_bar().encode(
+        color=alt.condition(alt.datum.change > 0, alt.value(TEAL), alt.value(CORAL)),
+        tooltip=[alt.Tooltip("group:N"), alt.Tooltip("views_multiplier:Q", format=".2f", title="Views multiplier"),
+                 alt.Tooltip("engagement_effect_pp:Q", format="+.2f", title="Engagement (pp)")],
+    )
+    text = base.mark_text(align="left", dx=4, color=SAND).encode(text="label:N")
+    return (bars + text).properties(height=210).configure_view(strokeWidth=0).configure_axis(
+        labelColor="#C8D9D5", titleColor="#9FBAB5", gridColor="#1B3038"
+    )
+
+
+def render_forecast(bundle: dict[str, object], draft: Draft) -> None:
+    try:
+        result = predict_video(
+            bundle, title=draft.title, tags=draft.tags, description=draft.description,
+            category_name=draft.category_name, day_of_week=draft.day_of_week, publish_hour=draft.publish_hour,
+        )
+    except ValueError as error:
+        st.info(str(error))
+        return
+
+    calibration = bundle["calibration"]
+    holdout_cover = calibration["coverage_check"]["views_chronological_holdout"]
+    percentiles = forecast_percentile(bundle, draft.category_name, result.views_log, result.engagement_rate)
+
+    kicker("MODEL OUTPUT")
+    first, second, third = st.columns([1.1, 1.1, 1.25])
+    with first:
+        st.metric("Expected views", compact_number(result.expected_views))
+        st.caption(
+            f"80% interval: {compact_number(result.views_ci_low)} to {compact_number(result.views_ci_high)} "
+            f"(held {holdout_cover:.0%} of the time on later uploads)"
+        )
+    with second:
+        st.metric("Expected engagement", as_percent(result.engagement_rate))
+        st.caption(f"80% interval: {as_percent(result.engagement_ci_low)} to {as_percent(result.engagement_ci_high)}")
+    with third:
+        category_line = (
+            f" Within {draft.category_name} (n={percentiles['category_n']}) it is the "
+            f"<b>{ordinal(percentiles['views_category'])}</b> percentile."
+            if percentiles["views_category"] is not None else ""
+        )
+        st.markdown(
+            f"<div class='signal-note'><b>Where it sits</b><br>Views forecast: <b>{ordinal(percentiles['views_overall'])}</b> "
+            f"percentile of all trending videos.{category_line} Engagement: "
+            f"<b>{ordinal(percentiles['engagement_overall'])}</b> percentile.</div>",
+            unsafe_allow_html=True,
+        )
+
+    if result.out_of_range_features:
+        names = ", ".join(name.replace("_", " ") for name in result.out_of_range_features[:4])
+        st.warning(f"Calibration note: this draft is outside the central 90% of the training sample for {names}. "
+                   "Treat the estimate as less stable.")
+
+    explanation = cached_explanation(bundle, draft)
+    kicker("WHY THIS FORECAST · EXACT SHAPLEY VALUES")
+    st.markdown(
+        f"<div class='why-note'>A typical trending video would be forecast at <b>{compact_number(explanation.baseline_views)}</b> views. "
+        f"Your draft is forecast at <b>{compact_number(explanation.forecast_views)}</b>. The bars show how much each group of "
+        "choices pushes that number up or down; together they account for the whole difference.</div>",
+        unsafe_allow_html=True,
+    )
+    st.altair_chart(explanation_chart(explanation.table), width="stretch")
+    st.caption(
+        "Category is often the longest bar because audience size differs a lot between categories (it says nothing about quality), "
+        "and it is fixed once you know what you are making. The title, tags, description and timing bars are the ones you can still change."
+    )
+    with st.expander("How is this calculated? (plain-language version)"):
+        st.markdown(
+            "1. Start from a **typical trending video** (an average over 80 real videos).\n"
+            "2. Swap in your draft's **title packaging** and see how the forecast changes; then do the same for tags, "
+            "description, publish time and category.\n"
+            "3. The order matters (a long title may only help once the category is right), so we try **every possible order** "
+            "(5 groups → 32 combinations) and average each group's effect. That average is the **Shapley value**.\n"
+            "4. Because we use all orders, the effects add up exactly to *forecast − typical*, and a group the model ignores gets zero.\n\n"
+            "Read the bars as *associations the model learned*, not guaranteed causes."
+        )
+
+    kicker("KEYWORD RADAR")
+    keywords = keyword_signals(bundle, draft.title)
+    if keywords.empty:
+        st.caption("None of the title words appears in enough trending videos (25+) for a reliable keyword statistic.")
+    else:
+        shown = keywords.assign(
+            **{"Videos": keywords["n"], "Median views": keywords["median_views"].map(compact_number),
+               "Views vs typical": keywords["views_lift"].map(lambda value: f"x{value:.2f}"),
+               "Engagement vs typical": keywords["engagement_lift"].map(lambda value: f"x{value:.2f}")}
+        ).rename(columns={"word": "Word"})[["Word", "Videos", "Median views", "Views vs typical", "Engagement vs typical"]]
+        st.dataframe(shown, hide_index=True, width="stretch")
+        st.caption("Median views of past trending videos whose title contains the word. Popular words often mark big channels, so treat this as context, not a recipe.")
+
+    kicker("EDITABLE SIGNAL CHECK")
+    for tip in draft_tips(result.feature_row, bundle["numeric_summary"]):
+        st.markdown(f"<div class='tip'>› {tip}</div>", unsafe_allow_html=True)
+
+    with st.expander("Show every feature calculated from this draft"):
+        st.dataframe(result.feature_row.T.rename(columns={0: "value"}).astype(str), width="stretch")
+
+    grid = cached_time_grid(bundle, draft)
+    brief = build_brief_markdown(draft, result, explanation, grid, cached_suggestions(bundle, draft))
+    st.download_button("Download strategy brief (.md)", data=brief, file_name="strategy_brief.md", mime="text/markdown")
+
+
+# --------------------------------------------------------------------------- #
+# Tab: Best time
+# --------------------------------------------------------------------------- #
+def render_best_time(bundle: dict[str, object], draft: Draft) -> None:
+    kicker("WHEN TO PUBLISH · 168 WEEKLY SLOTS (IST)")
+    st.markdown(
+        "<p class='muted'>The same draft is forecast in every day-and-hour slot of the week. Forecasts are averaged with the "
+        "neighbouring hours so one noisy slot cannot masquerade as the best time.</p>", unsafe_allow_html=True,
+    )
+    if not draft.title.strip():
+        st.info("Enter a title in the Forecast studio first.")
+        return
+    grid = cached_time_grid(bundle, draft)
+    table = grid.table.copy()
+    table["slot"] = table["day_name"] + " " + table["hour"].map(lambda hour: f"{hour:02d}:00")
+    table["views_label"] = table["views"].map(compact_number)
+    table["chosen"] = (table["day"] == draft.day_of_week) & (table["hour"] == draft.publish_hour)
+
+    heat = alt.Chart(table).mark_rect().encode(
+        x=alt.X("hour:O", title="Hour of day (IST)"),
+        y=alt.Y("day_name:N", sort=DAYS, title=None),
+        color=alt.Color("views:Q", scale=alt.Scale(scheme="tealblues"), legend=alt.Legend(title="Forecast views")),
+        tooltip=["slot:N", alt.Tooltip("views_label:N", title="Views"),
+                 alt.Tooltip("engagement:Q", format=".2%", title="Engagement")],
+    )
+    outline = alt.Chart(table[table["chosen"]]).mark_rect(fill=None, stroke=CORAL, strokeWidth=3).encode(
+        x="hour:O", y=alt.Y("day_name:N", sort=DAYS)
+    )
+    st.altair_chart((heat + outline).properties(height=290).configure_view(strokeWidth=0).configure_axis(
+        labelColor="#C8D9D5", titleColor="#9FBAB5"), width="stretch")
+    st.caption("Orange outline = your planned slot.")
+
+    best = grid.best_slots
+    columns = st.columns(len(best) + 1)
+    for position, (_, row) in enumerate(best.iterrows()):
+        with columns[position]:
+            st.metric(f"Best slot #{position + 1}", f"{row['day_name'][:3]} {int(row['hour']):02d}:00",
+                      f"{compact_number(row['views'])} views", delta_color="off")
+            st.button("Use this slot", key=f"slot_{position}", on_click=apply_draft,
+                      args=(draft.with_changes(day_of_week=int(row["day"]), publish_hour=int(row["hour"])),))
+    with columns[-1]:
+        gap = (grid.chosen_views / max(float(best.iloc[0]["views"]), 1.0) - 1) * 100
+        st.metric("Your slot vs best", compact_number(grid.chosen_views), f"{gap:+.1f}%", delta_color="off")
+    st.info(
+        f"Timing swing: the best slot is forecast **{grid.swing_pct:+.0f}%** above the median slot. "
+        "In this dataset, what you publish matters more than when; use timing as a tiebreaker."
+    )
+
+
+# --------------------------------------------------------------------------- #
+# Tab: Title lab
+# --------------------------------------------------------------------------- #
+def render_title_lab(bundle: dict[str, object], draft: Draft) -> None:
+    kicker("TITLE & METADATA LAB")
+    st.markdown(
+        "<p class='muted'>Each idea below is one small edit to your draft. The trained model re-scores the edited draft and we "
+        "rank the changes. Click <b>Apply</b> to load an edit into the Forecast studio.</p>", unsafe_allow_html=True,
+    )
+    if not draft.title.strip():
+        st.info("Enter a title in the Forecast studio first.")
+        return
+    suggestions = cached_suggestions(bundle, draft)
+    helpful = [item for item in suggestions if item.views_change_pct > 0.5]
+    harmful = [item for item in suggestions if item.views_change_pct <= 0.5]
+
+    if not helpful:
+        st.success("None of the tested edits is forecast to raise views; the draft is already in a good place by this model.")
+    for item in helpful[:6]:
+        card, action = st.columns([5, 1])
+        with card:
+            st.markdown(
+                f"<div class='edit-card'><b>{item.label}</b><br>{item.why}<br>"
+                f"Views {signed(item.views_change_pct)} → {compact_number(item.views)} · "
+                f"Engagement {signed(item.engagement_change_pp, ' pp')}</div>",
+                unsafe_allow_html=True,
+            )
+        with action:
+            st.button("Apply", key=f"apply_{item.key}", on_click=apply_draft, args=(item.draft,))
+    if harmful:
+        with st.expander(f"Edits associated with lower or flat views ({len(harmful)})"):
+            for item in harmful:
+                st.markdown(f"- **{item.label}**: views {signed(item.views_change_pct)}, "
+                            f"engagement {signed(item.engagement_change_pp, ' pp')}", unsafe_allow_html=True)
+    st.caption("Associations from India-trending videos, not causal promises: apply only edits that keep the title honest and useful.")
+
+    kicker("WORDS THAT TEND TO TRAVEL WITH HIGH / LOW VIEWS")
+    best, worst = top_keywords(bundle)
+    left, right = st.columns(2)
+    for column, frame, heading in ((left, best, "Higher-view words"), (right, worst, "Lower-view words")):
+        with column:
+            st.markdown(f"**{heading}**")
+            view = frame.assign(Word=frame["word"], Videos=frame["n"].astype(int),
+                                **{"Median views": frame["median_views"].map(compact_number),
+                                   "Vs typical": frame["views_lift"].map(lambda value: f"x{value:.2f}")})
+            st.dataframe(view[["Word", "Videos", "Median views", "Vs typical"]], hide_index=True, width="stretch")
+
+
+# --------------------------------------------------------------------------- #
+# Tab: Similar videos
+# --------------------------------------------------------------------------- #
+def render_similar(bundle: dict[str, object], draft: Draft) -> None:
+    kicker("SECOND OPINION · NEAREST TRENDING VIDEOS")
+    st.markdown(
+        "<p class='muted'>A completely different method: find trending videos whose title and tags read like yours (TF-IDF cosine "
+        "similarity) and look at what they got. If the two methods agree, confidence goes up.</p>", unsafe_allow_html=True,
+    )
+    if not draft.title.strip():
+        st.info("Enter a title in the Forecast studio first.")
+        return
+    try:
+        index = get_similarity_index()
+    except FileNotFoundError as error:
+        st.error(str(error))
+        return
+    result = similar_videos(index, draft.title, draft.tags)
+    if result.table.empty:
+        st.info("No trending video is similar enough to this draft's wording. Try adding descriptive keywords to the title or tags.")
+        return
+    forecast = predict_video(bundle, title=draft.title, tags=draft.tags, description=draft.description,
+                             category_name=draft.category_name, day_of_week=draft.day_of_week,
+                             publish_hour=draft.publish_hour)
+    left, middle, right = st.columns(3)
+    left.metric("Model forecast", compact_number(forecast.expected_views))
+    middle.metric(f"Look-alike median ({result.analogs_used} videos)", compact_number(result.analog_median_views))
+    ratio = max(forecast.expected_views, result.analog_median_views) / max(min(forecast.expected_views, result.analog_median_views), 1)
+    right.metric("Agreement", "Consistent" if ratio <= 2 else "Differ", f"x{ratio:.1f} apart", delta_color="off")
+    st.caption("Consistent = within a factor of two. Look-alikes are chosen by wording only, so they can include much larger channels.")
+
+    shown = result.table.assign(
+        Title=result.table["title"], Category=result.table["category"],
+        Views=result.table["views"].map(compact_number), Engagement=result.table["engagement"].map(as_percent),
+        Similarity=result.table["similarity"].map(lambda value: f"{value:.0%}"), Link=result.table["url"],
+    )[["Title", "Category", "Views", "Engagement", "Similarity", "Link"]]
+    st.dataframe(shown, hide_index=True, width="stretch",
+                 column_config={"Link": st.column_config.LinkColumn("Watch", display_text="open")})
+
+
+# --------------------------------------------------------------------------- #
+# Tab: Scenario lab
+# --------------------------------------------------------------------------- #
+def render_comparison(base: Draft, alternative: Draft, bundle: dict[str, object]) -> None:
+    results = [
+        predict_video(bundle, title=d.title, tags=d.tags, description=d.description, category_name=d.category_name,
+                      day_of_week=d.day_of_week, publish_hour=d.publish_hour)
+        for d in (base, alternative)
+    ]
+    a, b = results
+    st.dataframe(
+        pd.DataFrame({
+            "Metric": ["Expected views", "80% interval", "Expected engagement"],
+            "Draft A": [compact_number(a.expected_views), f"{compact_number(a.views_ci_low)} - {compact_number(a.views_ci_high)}", as_percent(a.engagement_rate)],
+            "Draft B": [compact_number(b.expected_views), f"{compact_number(b.views_ci_low)} - {compact_number(b.views_ci_high)}", as_percent(b.engagement_rate)],
+            "Change (B vs A)": [f"{((b.expected_views / max(a.expected_views, 1)) - 1) * 100:+.1f}%", "",
+                                f"{(b.engagement_rate - a.engagement_rate) * 100:+.2f} pp"],
+        }),
+        hide_index=True, width="stretch",
+    )
+    overlap = min(a.views_ci_high, b.views_ci_high) - max(a.views_ci_low, b.views_ci_low)
+    if overlap > 0:
+        st.info("The two 80% intervals overlap heavily, so this change is **within the model's uncertainty**; do not over-read the difference.")
+    else:
+        st.success("The 80% intervals do not overlap: the model sees a clear difference between the drafts.")
+    st.caption("A scenario comparison of patterns in the data, not proof that changing one field causes the outcome.")
+
+
+def render_scenario(bundle: dict[str, object], categories: list[str], draft: Draft) -> None:
+    kicker("A/B WHAT-IF TEST")
+    st.markdown("<p class='muted'>Draft A is your current proposal. Change Draft B and compare the model outputs.</p>", unsafe_allow_html=True)
+    left, right = st.columns(2, gap="large")
+    with left:
+        st.markdown("#### Draft A · current proposal")
+        st.code(draft.title[:80] + ("…" if len(draft.title) > 80 else ""), language=None)
+        st.caption(f"{draft.category_name} · {DAYS[draft.day_of_week]} · {draft.publish_hour:02d}:00 IST")
+    with right:
+        st.markdown("#### Draft B · alternate proposal")
+        for key, value in {"compare_title": draft.title, "compare_category": draft.category_name,
+                           "compare_day": DAYS[draft.day_of_week], "compare_hour": draft.publish_hour,
+                           "compare_tags": draft.tags, "compare_description": draft.description}.items():
+            st.session_state.setdefault(key, value)
+        alternative = to_draft(proposal_inputs("compare", categories))
+        st.button("Reset Draft B to Draft A", on_click=lambda: st.session_state.update(
+            compare_title=draft.title, compare_category=draft.category_name, compare_day=DAYS[draft.day_of_week],
+            compare_hour=draft.publish_hour, compare_tags=draft.tags, compare_description=draft.description))
+    if st.button("Compare Draft A and Draft B", width="stretch"):
+        try:
+            render_comparison(draft, alternative, bundle)
+        except ValueError as error:
+            st.info(str(error))
+
+    kicker("CATEGORY WHAT-IF")
+    st.markdown("<p class='muted'>How would the model read the <i>same wording</i> in another category? Only categories with at least "
+                "30 trending videos are shown. This is for understanding the model, not for mislabelling a video.</p>", unsafe_allow_html=True)
+    if not draft.title.strip():
+        return
+    table = cached_categories(bundle, draft)
+    chart = alt.Chart(table).mark_bar().encode(
+        x=alt.X("views:Q", title="Forecast views"),
+        y=alt.Y("category:N", sort="-x", title=None),
+        color=alt.condition(alt.datum.is_selected, alt.value(CORAL), alt.value(TEAL)),
+        tooltip=["category:N", alt.Tooltip("views:Q", format=",.0f"), alt.Tooltip("engagement:Q", format=".2%"),
+                 alt.Tooltip("videos_in_data:Q", title="Videos in data")],
+    ).properties(height=26 * len(table) + 20).configure_view(strokeWidth=0).configure_axis(labelColor="#C8D9D5", titleColor="#9FBAB5", gridColor="#1B3038")
+    st.altair_chart(chart, width="stretch")
+    st.caption("Orange = your category.")
+
+
+# --------------------------------------------------------------------------- #
+# Tab: Model brief
+# --------------------------------------------------------------------------- #
+def render_method(bundle: dict[str, object]) -> None:
+    metrics, calibration = bundle["metrics"], bundle["calibration"]
+    check = calibration["coverage_check"]
+    left, right = st.columns(2)
+    with left:
+        st.markdown("#### Validation at a glance")
+        a, b = st.columns(2)
+        a.metric("Views R² · 5-fold CV", f"{metrics['views_log']['five_fold_cv']['r2_mean']:.3f}")
+        b.metric("Views R² · later uploads", f"{metrics['views_log']['chronological_holdout']['r2']:.3f}")
+        c, d = st.columns(2)
+        c.metric("Engagement R² · 5-fold CV", f"{metrics['engagement_rate']['five_fold_cv']['r2_mean']:.3f}")
+        d.metric("Engagement R² · later uploads", f"{metrics['engagement_rate']['chronological_holdout']['r2']:.3f}")
+        st.caption("The chronological holdout trains on earlier uploads and tests on later ones, which is harder and more realistic.")
+    with right:
+        st.markdown("#### What each strategy group contributes (global importance)")
+        groups = global_feature_groups(bundle)
+        st.bar_chart(groups.pivot(index="group", columns="target", values="importance").fillna(0))
+
+    st.markdown("#### Honest uncertainty: do the 80% intervals really hold?")
+    coverage = pd.DataFrame({
+        "Check": ["Out-of-fold (shuffled)", "Later-in-time holdout"],
+        "Views intervals": [f"{check['views_out_of_fold']:.1%}", f"{check['views_chronological_holdout']:.1%}"],
+        "Engagement intervals": [f"{check['engagement_out_of_fold']:.1%}", f"{check['engagement_chronological_holdout']:.1%}"],
+        "Target": ["80%", "80%"],
+    })
+    st.dataframe(coverage, hide_index=True, width="stretch")
+    st.caption(
+        f"Split-conformal calibration: a views forecast is typically within x{calibration['views_multiplier_low']:.2f} to "
+        f"x{calibration['views_multiplier_high']:.2f} of the truth. Intervals that are wide are the honest answer when the signal is weak."
+    )
+
+    with st.expander("How the whole system works (for the viva)"):
+        st.markdown(
+            "**Data** → India trending snapshots, de-duplicated to one row per video (16,307).  \n"
+            "**Features** → only things known before upload: title style, tags, description, category, IST publish time.  \n"
+            "**Models** → two Random Forests (log-views and engagement rate).  \n"
+            "**Evaluation** → 5-fold CV plus a chronological holdout.  \n"
+            "**Explanation** → exact Shapley values over five feature groups.  \n"
+            "**Uncertainty** → split-conformal intervals, with coverage measured on later uploads.  \n"
+            "**Second opinion** → TF-IDF nearest-neighbour look-alike videos.  \n"
+            "**Decision tools** → 168-slot timing map, edit ranking, category what-if."
+        )
+    st.markdown("#### Honest limits")
+    st.warning(
+        "The dataset contains only videos that already trended in India (2017-2018). The app estimates relative performance in that "
+        "population. It cannot predict whether an arbitrary upload will go viral, and it does not observe thumbnails, channel "
+        "reputation, retention or YouTube's internal ranking signals. Every effect shown is an association, not a cause."
+    )
+
+
+# --------------------------------------------------------------------------- #
+# Main
+# --------------------------------------------------------------------------- #
+def main() -> None:
+    apply_style()
+    try:
+        bundle = get_bundle()
+    except (FileNotFoundError, ValueError) as error:
+        st.error(str(error))
+        st.code(".\\venv\\Scripts\\python.exe src\\advanced_model.py --train", language="powershell")
+        st.stop()
+
+    categories = list(bundle["categories"])
+    init_state(categories)
+
+    st.markdown(
+        """
+        <div class="masthead">
+          <div class="eyebrow">AI / ML • EXPLAINABLE FORECASTING</div>
+          <h1>Signal Studio<span> / YouTube strategy before publish</span></h1>
+          <p>Turn a proposed title, tags, description and launch time into a transparent forecast, then see why, when to publish,
+          what to edit, and how sure the model really is.</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    metrics = bundle["metrics"]
+    with st.sidebar:
+        st.markdown("### Try an example")
+        st.selectbox("Load a sample draft", list(EXAMPLES), key="example_choice")
+        st.button("Load example", on_click=load_example, args=(categories,), width="stretch")
+        st.markdown("### About this demo")
+        st.write(f"**{bundle['training_rows']:,}** unique India-trending videos")
+        st.write(f"Views R² **{metrics['views_log']['five_fold_cv']['r2_mean']:.2f}** · engagement R² "
+                 f"**{metrics['engagement_rate']['five_fold_cv']['r2_mean']:.2f}** (5-fold CV)")
+        st.info("No likes, comments, views, channel information or thumbnail data are used as inputs.")
+        st.caption("Flow for the demo: Forecast → Why → Best time → Title lab → Similar videos → Scenario lab.")
+
+    studio, timing, lab, similar, scenario, method = st.tabs(
+        ["Forecast studio", "Best time", "Title lab", "Similar videos", "Scenario lab", "Model brief"]
+    )
+
+    with studio:
+        with st.form("proposal_form", clear_on_submit=False):
+            proposal = proposal_inputs("main", categories)
+            submitted = st.form_submit_button("Generate pre-publication forecast", width="stretch")
+        if submitted:
+            st.session_state["proposal"] = proposal
+        draft = to_draft(st.session_state["proposal"])
+        render_forecast(bundle, draft)
+
+    draft = to_draft(st.session_state["proposal"])
+    with timing:
+        render_best_time(bundle, draft)
+    with lab:
+        render_title_lab(bundle, draft)
+    with similar:
+        render_similar(bundle, draft)
+    with scenario:
+        render_scenario(bundle, categories, draft)
+    with method:
+        render_method(bundle)
+
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: youtube-strategy-predictor
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements-app.txt
+    startCommand: streamlit run app.py --server.address 0.0.0.0 --server.port $PORT
+    healthCheckPath: /_stcore/health
+    autoDeploy: true
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.10.13
+      - key: STREAMLIT_BROWSER_GATHER_USAGE_STATS
+        value: "false"

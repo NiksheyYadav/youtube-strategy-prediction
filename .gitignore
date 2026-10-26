@@ -2,5 +2,12 @@ venv/
 __pycache__/
 *.pyc
 data/
-models/
+# The application ships the compact, reviewed inference models. Raw datasets
+# remain local because they are large and are not needed to serve predictions.
+!models/
+!models/*.pkl
+!models/*.joblib
 .ipynb_checkpoints/
+logs/
+.pytest_cache/
+.vscode/
