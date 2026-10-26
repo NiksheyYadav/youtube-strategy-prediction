@@ -8,7 +8,7 @@ import pytest
 import requests
 
 from src import llm_client
-from src.device_profile import DeviceProfile, allowed_models, detect_device, parse_nvidia_smi, select_model
+from src.device_profile import DeviceProfile, allowed_models, detect_device, parse_cgroup_limit, parse_nvidia_smi, select_model
 from src.llm_client import (LLMBadResponse, LLMBusy, LLMConfig, LLMTimeout, LLMUnavailable, config_from_env,
                             generate_json, list_models)
 
@@ -180,3 +180,8 @@ def test_logs_never_contain_prompts_responses_or_keys(monkeypatch, caplog):
     text = caplog.text
     assert "status=ok" in text
     assert not any(secret in text for secret in ("SECRET-ANSWER", "SECRET-SYSTEM", "SECRET-USER-DRAFT", "KEY-123"))
+
+
+def test_container_memory_limit_is_parsed_so_hosted_instances_are_not_mistaken_for_big_machines():
+    assert parse_cgroup_limit("536870912") == pytest.approx(0.5)
+    assert parse_cgroup_limit("max") is None and parse_cgroup_limit("9223372036854771712") is None

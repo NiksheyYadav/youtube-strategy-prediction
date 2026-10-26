@@ -54,7 +54,7 @@ def rules_recommendation(packet: EvidencePacket) -> dict:
     for fact in packet.by_kind("shapley"):
         if fact.data["group"] in EDITABLE_GROUPS and fact.data["change_pct"] <= WEAK_GROUP_PCT and len(weaknesses) < 2:
             weaknesses.append({"field": EDITABLE_GROUPS[fact.data["group"]],
-                               "issue": f"{fact.data['group']} lowers the forecast versus a typical trending video",
+                               "issue": "Lowers the forecast versus a typical trending video",
                                "why": fact.text, "evidence": [fact.id]})
     for fact in packet.by_kind("out_of_range")[:1]:
         weaknesses.append({"field": _field_for_feature(fact.data["features"][0]),

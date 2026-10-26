@@ -9,7 +9,7 @@ import pytest
 from src.golden import GOLDEN_DRAFTS
 from src.inference import load_bundle, predict_video
 from src.insights import Draft, load_similarity_index
-from src.reco_evidence import DATASET_LIMIT, build_evidence
+from src.reco_evidence import DATASET_LIMIT, build_evidence, ordinal
 
 
 @pytest.fixture(scope="module")
@@ -59,3 +59,8 @@ def test_building_evidence_is_deterministic(bundle):
     a = build_evidence(bundle, GOLDEN_DRAFTS["music"])
     b = build_evidence(bundle, GOLDEN_DRAFTS["music"])
     assert [f.text for f in a.facts] == [f.text for f in b.facts] and a.gates == b.gates
+
+
+def test_ordinals_read_naturally():
+    assert [ordinal(n) for n in (1, 2, 3, 4, 6, 11, 12, 13, 21, 81, 83, 100)] == [
+        "1st", "2nd", "3rd", "4th", "6th", "11th", "12th", "13th", "21st", "81st", "83rd", "100th"]

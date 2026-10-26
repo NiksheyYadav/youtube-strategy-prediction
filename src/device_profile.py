@@ -91,7 +91,34 @@ def select_model(profile: DeviceProfile, installed: list[str], override: str | N
 # --------------------------------------------------------------------------- #
 # Detection (never raises: unknown values degrade to "no GPU" / conservative RAM)
 # --------------------------------------------------------------------------- #
+def parse_cgroup_limit(text: str) -> float | None:
+    """Container memory limit in GB from a cgroup file's text ('max' or absurdly large = unlimited)."""
+    try:
+        value = int(text.strip())
+    except ValueError:
+        return None
+    return value / 1024**3 if 0 < value < 1 << 50 else None
+
+
+def _container_limit_gb() -> float | None:
+    for path in ("/sys/fs/cgroup/memory.max", "/sys/fs/cgroup/memory/memory.limit_in_bytes"):
+        try:
+            with open(path, encoding="utf-8") as handle:
+                limit = parse_cgroup_limit(handle.read())
+            if limit:
+                return limit
+        except OSError:
+            continue
+    return None
+
+
 def _ram_gb() -> float:
+    host = _host_ram_gb()
+    limit = _container_limit_gb()
+    return min(host, limit) if limit else host
+
+
+def _host_ram_gb() -> float:
     try:
         if platform.system() == "Windows":
             class MemoryStatus(ctypes.Structure):

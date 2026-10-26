@@ -30,6 +30,12 @@ TIMING_GAP_THRESHOLD_PCT = 5.0  # the planned slot must trail the best slot by t
 MIN_EDIT_EFFECT_PCT = 2.0       # smaller model-scored changes are treated as noise
 
 
+def ordinal(value: float) -> str:
+    number = int(round(value))
+    suffix = "th" if 10 <= number % 100 <= 20 else {1: "st", 2: "nd", 3: "rd"}.get(number % 10, "th")
+    return f"{number}{suffix}"
+
+
 @dataclass(frozen=True)
 class Fact:
     id: str
@@ -84,8 +90,8 @@ def build_evidence(bundle: dict[str, object], draft: Draft, similarity_index: di
         f"Model forecast: {_compact(prediction.expected_views)} views (80% interval {_compact(prediction.views_ci_low)} to "
         f"{_compact(prediction.views_ci_high)}) and {prediction.engagement_rate * 100:.2f}% engagement (80% interval "
         f"{prediction.engagement_ci_low * 100:.2f}% to {prediction.engagement_ci_high * 100:.2f}%). The views forecast is at the "
-        f"{pct['views_overall']:.0f}th percentile of trending videos"
-        + (f" ({pct['views_category']:.0f}th within {draft.category_name}, n={pct['category_n']})." if pct["views_category"] is not None else "."),
+        f"{ordinal(pct['views_overall'])} percentile of trending videos"
+        + (f" ({ordinal(pct['views_category'])} within {draft.category_name}, n={pct['category_n']})." if pct["views_category"] is not None else "."),
         expected_views=prediction.expected_views, engagement_rate=prediction.engagement_rate, percentiles=pct)
     calibration = bundle["calibration"]
     cover = calibration["coverage_check"]
