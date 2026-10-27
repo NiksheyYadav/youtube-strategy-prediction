@@ -23,11 +23,42 @@ def _button(app: AppTest, label: str):
 def test_app_boots_with_every_tab_and_no_exception(app):
     assert not app.exception
     assert [tab.label for tab in app.tabs] == [
-        "Forecast studio", "Best time", "Title lab", "AI coach", "Similar videos", "Scenario lab", "Model brief",
+        "Forecast studio", "My channel", "Best time", "Title lab", "AI coach", "Similar videos", "Scenario lab", "Model brief",
     ]
     metrics = {metric.label: metric.value for metric in app.metric}
     assert metrics["Expected views"] and metrics["Expected engagement"]
     assert "Best slot #1" in metrics
+    assert "Expected views for your channel" not in metrics  # nothing is personalised until the creator adds data
+
+
+def test_sample_channel_personalises_the_forecast_and_can_be_removed(app):
+    _button(app, "Try the sample channel").click()
+    app.run()
+    assert not app.exception
+    metrics = {metric.label: metric.value for metric in app.metric}
+    assert metrics["Expected views for your channel"] and metrics["Your usual video"]
+    assert metrics["This draft vs your usual"].endswith("%")
+    assert metrics["Videos loaded"] == "26"
+    # the trending-video forecast is still there, unchanged and clearly separate
+    assert metrics["Expected views"]
+    assert any("made-up sample channel" in warning.value for warning in app.warning)
+
+    _button(app, "Remove my data").click()
+    app.run()
+    assert not app.exception
+    assert "Expected views for your channel" not in {metric.label for metric in app.metric}
+    assert "channel" not in app.session_state, "removing the data must really forget it"
+
+
+def test_personal_forecast_explains_when_there_is_too_little_history(app):
+    from src.channel_history import parse_upload
+
+    few = b"Video title,Video publish time,Views\nOnly one,2026-01-02,100\nTwo,2026-01-09,200\n"
+    app.session_state["channel"] = parse_upload("few.csv", few)
+    app.run()
+    assert not app.exception
+    assert "Expected views for your channel" not in {metric.label for metric in app.metric}
+    assert any("settled" in info.value for info in app.info)
 
 
 def test_every_example_draft_produces_a_forecast(app):
@@ -96,3 +127,64 @@ def test_apply_button_loads_a_re_scored_title_into_the_form(monkeypatch):
     before = app.session_state["main_title"]
     next(b for b in app.button if b.key and b.key.startswith("coach_apply_")).click().run()
     assert not app.exception and app.session_state["main_title"] != before
+
+
+# ------------------------------------------------------------------ direct YouTube connection (network mocked)
+def _history_of(n=5):
+    from src.channel_history import clean_videos
+    import pandas as pd
+
+    frame = pd.DataFrame({"title": [f"Video {i}" for i in range(n)], "views": [1000 + i for i in range(n)],
+                          "publish_time": [f"2026-0{1 + i}-10T10:00:00Z" for i in range(n)]})
+    return clean_videos(frame, source="api")
+
+
+def test_server_without_google_settings_explains_how_to_set_it_up(monkeypatch):
+    monkeypatch.delenv("GOOGLE_CLIENT_ID", raising=False)
+    app = AppTest.from_file(str(APP_PATH), default_timeout=180).run()
+    assert not app.exception
+    assert any("not set up on this server" in caption.value for caption in app.caption)
+    assert "Connect with Google" not in [button.label for button in app.button]
+
+
+def test_connect_button_prepares_a_pkce_login_link_to_google(monkeypatch):
+    monkeypatch.setenv("GOOGLE_CLIENT_ID", "client-123.apps.googleusercontent.com")
+    app = AppTest.from_file(str(APP_PATH), default_timeout=180).run()
+    _button(app, "Connect with Google").click()
+    app.run()
+    assert not app.exception
+    url = app.session_state["google_auth_url"]
+    assert url.startswith("https://accounts.google.com/o/oauth2/v2/auth?")
+    assert "code_challenge_method=S256" in url and "youtube.readonly" in url and "access_type=online" in url
+
+
+def test_returning_from_google_loads_the_videos_and_cancels_the_access(monkeypatch):
+    import src.youtube_api as youtube_api
+    import src.youtube_oauth as youtube_oauth
+
+    token = youtube_oauth.TokenSet("ya29.SECRET", float("inf"))
+    revoked = []
+    monkeypatch.setenv("GOOGLE_CLIENT_ID", "client-123")
+    monkeypatch.setattr(youtube_oauth, "finish_login", lambda config, pending, params, **k: token)
+    monkeypatch.setattr(youtube_api, "fetch_channel_history", lambda tok, *a, **k: (_history_of(), {"title": "My *channel*"}))
+    monkeypatch.setattr(youtube_oauth, "revoke", lambda tok, **k: revoked.append(tok))
+    app = AppTest.from_file(str(APP_PATH), default_timeout=180)
+    app.query_params["code"], app.query_params["state"] = "the-code", "the-state"
+    app.run()
+    assert not app.exception
+    assert app.session_state["channel"].source == "api" and len(app.session_state["channel"].videos) == 5
+    assert revoked == [token], "the app's access must be cancelled right after the videos are read"
+    assert "google_token" not in app.session_state, "no token is kept in the session"
+    assert "ya29.SECRET" not in str(app.session_state["channel"])
+    assert any("5 videos were read" in success.value for success in app.success)
+    assert "code" not in app.query_params and "state" not in app.query_params, "the one-time code must not stay in the address"
+
+
+def test_a_failed_or_declined_sign_in_shows_a_plain_message_and_loads_nothing(monkeypatch):
+    monkeypatch.setenv("GOOGLE_CLIENT_ID", "client-123")
+    app = AppTest.from_file(str(APP_PATH), default_timeout=180)
+    app.query_params["error"], app.query_params["state"] = "access_denied", "whatever"
+    app.run()
+    assert not app.exception
+    assert "channel" not in app.session_state
+    assert any("chose not to give access" in error.value for error in app.error)

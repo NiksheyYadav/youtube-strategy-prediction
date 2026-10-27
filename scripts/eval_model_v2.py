@@ -33,25 +33,17 @@ sys.path.insert(0, str(ROOT))
 
 from src.advanced_model import CATEGORY_COLUMN, CLEAN_PATH, build_feature_table, make_model, model_columns  # noqa: E402
 from src.history_features import MIN_USABLE_VIDEOS, add_history_features  # noqa: E402
+from src.history_model import lift_features  # noqa: E402
 
 LEVEL_SHIFT = -3.0  # log space: about 20x fewer views
 DESIGNS = ("cold", "absolute", "lift", "lift+level")
 
 
-def lift_features(history: pd.DataFrame, level: bool) -> pd.DataFrame:
-    mean = history["prior_mean_logviews"]
-    out = pd.DataFrame({
-        "prior_n": history["prior_n"],
-        "prior_std_logviews": history["prior_std_logviews"],
-        "prior_last_minus_mean": history["prior_last_logviews"] - mean,
-        "prior_max_minus_mean": history["prior_max_logviews"] - mean,
-        "prior_median_minus_mean": history["prior_median_logviews"] - mean,
-        "prior_median_engagement": history["prior_median_engagement"],
-        "prior_days_since_last": history["prior_days_since_last"],
-        "prior_missing": history["prior_missing"],
-    })
+def lift_features_with_level(history: pd.DataFrame, level: bool) -> pd.DataFrame:
+    """The shipped level-free features (src.history_model), optionally plus the channel's level (the 'lift+level' design)."""
+    out = lift_features(history)
     if level:
-        out["prior_mean_logviews"] = mean
+        out["prior_mean_logviews"] = history["prior_mean_logviews"]
     return out
 
 
@@ -87,8 +79,8 @@ def evaluate_split(train: np.ndarray, test: np.ndarray, X0, H, log_views, engage
         return {"deployable_r2": r2_score(log_views[test], pred),
                 "history_rows_r2": r2_score(log_views[test_h], pred_for_history_rows)}
 
-    features = {"absolute": pd.concat([X0, H], axis=1), "lift": pd.concat([X0, lift_features(H, False)], axis=1),
-                "lift+level": pd.concat([X0, lift_features(H, True)], axis=1)}
+    features = {"absolute": pd.concat([X0, H], axis=1), "lift": pd.concat([X0, lift_features_with_level(H, False)], axis=1),
+                "lift+level": pd.concat([X0, lift_features_with_level(H, True)], axis=1)}
     for name, X in features.items():
         is_lift = name.startswith("lift")
         target = log_views - baseline if is_lift else log_views
@@ -99,7 +91,7 @@ def evaluate_split(train: np.ndarray, test: np.ndarray, X0, H, log_views, engage
 
         # stress test: the same videos from a channel ~20x smaller
         shifted_h = shift_levels(H, LEVEL_SHIFT)
-        X_shift = pd.concat([X0, shifted_h if name == "absolute" else lift_features(shifted_h, name == "lift+level")], axis=1)
+        X_shift = pd.concat([X0, shifted_h if name == "absolute" else lift_features_with_level(shifted_h, name == "lift+level")], axis=1)
         raw_shift = model.predict(X_shift.iloc[test_h])
         shifted_baseline = shifted_h["prior_mean_logviews"].to_numpy()[test_h]
         pred_shift = raw_shift + shifted_baseline if is_lift else raw_shift

@@ -4,11 +4,15 @@ from __future__ import annotations
 
 import re
 import time
+from dataclasses import replace
+from pathlib import Path
 
 import altair as alt
 import pandas as pd
 import streamlit as st
 
+from src.channel_history import HistoryError, parse_upload, summarise
+from src.history_model import load_history_models
 from src.inference import global_feature_groups, load_bundle, predict_video
 from src.insights import (
     DAYS,
@@ -26,8 +30,11 @@ from src.insights import (
 )
 
 from src.env_file import load_env_file
+from src.personal_forecast import personal_forecast
 from src.recommendations import generate_recommendation, resolve_runtime
 from src.ui_text import escape_markdown
+from src.youtube_api import YouTubeAPIError, fetch_channel_history
+from src.youtube_oauth import OAuthError, PendingLogins, begin_login, finish_login, oauth_config_from_env, revoke
 
 load_env_file()  # optional ./.env settings (LLM model, Google sign-in); real environment variables always win
 
@@ -130,6 +137,18 @@ def get_bundle() -> dict[str, object]:
 @st.cache_resource(show_spinner=False)
 def get_similarity_index() -> dict[str, object]:
     return load_similarity_index()
+
+
+@st.cache_resource(show_spinner=False)
+def get_pending_logins() -> PendingLogins:
+    """Shared by all sessions of this server: the browser leaves for Google and comes back as a brand-new session."""
+    return PendingLogins()
+
+
+@st.cache_resource(show_spinner=False)
+def get_history_models() -> dict[str, object] | None:
+    """The models that use a creator's own history; None if the file is missing (the app then forecasts without history)."""
+    return load_history_models()
 
 
 @st.cache_data(show_spinner=False, max_entries=64)
@@ -300,6 +319,52 @@ def explanation_chart(table: pd.DataFrame) -> alt.Chart:
     )
 
 
+def render_personal_panel(bundle: dict[str, object], draft: Draft) -> None:
+    """Forecast for the creator's own channel (needs the earlier videos from the My channel tab)."""
+    kicker("FOR YOUR CHANNEL · EXPERIMENTAL")
+    channel = st.session_state.get("channel")
+    if channel is None:
+        st.markdown(
+            "<div class='signal-note'>The numbers above compare your draft with a <b>typical trending video</b>. Add your own earlier "
+            "videos in the <b>My channel</b> tab (upload a YouTube Studio export, or try the sample) to see what the model expects "
+            "for <b>your</b> channel.</div>", unsafe_allow_html=True,
+        )
+        return
+    models = get_history_models()
+    result = personal_forecast(bundle, models, draft, channel)
+    if result.prediction is None:
+        if result.reason == "no_models":
+            st.info("The history model file is missing on this server, so only the trending-video forecast is available.")
+        else:
+            st.info(f"Only {result.usable_videos} of your videos have views that have settled (the model needs at least 3 videos "
+                    "that are 14 days old or older). Add more videos, or wait until recent ones settle.")
+        return
+    prediction = result.prediction
+    first, second, third, fourth = st.columns(4)
+    with first:
+        st.metric("Expected views for your channel", compact_number(prediction.expected_views))
+        st.caption(f"80% interval: {compact_number(prediction.views_ci_low)} to {compact_number(prediction.views_ci_high)}")
+    with second:
+        st.metric("Your usual video", compact_number(prediction.channel_level_views))
+        st.caption(f"typical of your last {prediction.n_videos_used} settled videos")
+    with third:
+        st.metric("This draft vs your usual", f"{(prediction.lift_multiplier - 1) * 100:+.0f}%")
+        st.caption("what the model expects the draft to add or lose")
+    with fourth:
+        st.metric("Expected engagement", as_percent(prediction.engagement_rate))
+        st.caption(f"80% interval: {as_percent(prediction.engagement_ci_low)} to {as_percent(prediction.engagement_ci_high)}"
+                   + (" · from the trending-video model (your file has no likes or comments)"
+                      if prediction.engagement_source == "trending" else ""))
+    tested = models["metrics"]
+    unseen, cover = tested["unseen_channels"], tested["interval_coverage_80"]
+    st.caption(
+        f"Experimental. Built from {prediction.n_videos_used} of your earlier videos (views settled for 14+ days). On channels the model "
+        f"had never seen, history raised the views score (R²) from {unseen['log_views_r2_cold_start_model']:.2f} to "
+        f"{unseen['log_views_r2_history_model']:.2f}, and the 80% interval held {cover['views_unseen_channels']:.0%} of the time. "
+        "The model was trained on videos that trended, so for small channels treat the numbers as a guide, not a promise."
+    )
+
+
 def render_forecast(bundle: dict[str, object], draft: Draft) -> None:
     try:
         result = predict_video(
@@ -337,6 +402,8 @@ def render_forecast(bundle: dict[str, object], draft: Draft) -> None:
             f"<b>{ordinal(percentiles['engagement_overall'])}</b> percentile.</div>",
             unsafe_allow_html=True,
         )
+
+    render_personal_panel(bundle, draft)
 
     if result.out_of_range_features:
         names = ", ".join(name.replace("_", " ") for name in result.out_of_range_features[:4])
@@ -688,14 +755,21 @@ def render_coach(bundle: dict[str, object], draft: Draft) -> None:
     if not draft.title.strip():
         st.info("Enter a title in the Forecast studio first.")
         return
+    if st.session_state.get("channel") is not None:
+        st.caption("Your channel data is included: the advice can use your usual level and patterns in your own videos.")
+    else:
+        st.caption("Tip: add your own videos in the My channel tab to get advice based on your own history.")
 
     if st.button("Generate recommendations", key="coach_generate", width="stretch"):
         try:
             index = get_similarity_index()
         except FileNotFoundError:
             index = None
+        channel = st.session_state.get("channel")
+        personal = personal_forecast(bundle, get_history_models(), draft, channel) if channel is not None else None
         with st.spinner("Collecting evidence and writing recommendations…"):
-            st.session_state["coach_result"] = (draft, generate_recommendation(bundle, draft, runtime=runtime, similarity_index=index))
+            st.session_state["coach_result"] = (draft, generate_recommendation(
+                bundle, draft, runtime=runtime, similarity_index=index, personal=personal, channel=channel))
     stored = st.session_state.get("coach_result")
     if not stored:
         return
@@ -760,6 +834,151 @@ def render_coach(bundle: dict[str, object], draft: Draft) -> None:
 
 
 # --------------------------------------------------------------------------- #
+# Tab: My channel
+# --------------------------------------------------------------------------- #
+SAMPLE_CHANNEL_PATH = Path(__file__).resolve().parent / "sample_data" / "sample_channel.csv"
+
+
+def clear_channel() -> None:
+    """Callback: forget the creator's data (it only ever lived in this session)."""
+    for key in ("channel", "channel_file_id"):
+        st.session_state.pop(key, None)
+
+
+def load_sample_channel() -> None:
+    history = parse_upload(SAMPLE_CHANNEL_PATH.name, SAMPLE_CHANNEL_PATH.read_bytes())
+    st.session_state["channel"] = replace(history, source="sample")
+    st.session_state.pop("channel_file_id", None)
+
+
+def start_google_login() -> None:
+    """Callback for the 'Connect with Google' button: prepare the Google address to continue to."""
+    config = oauth_config_from_env()
+    if config is not None:
+        st.session_state["google_auth_url"] = begin_login(config, get_pending_logins())
+
+
+def handle_google_callback() -> None:
+    """Google sends the creator back here with ?code=...&state=...: read their videos once, then cancel the access."""
+    params = st.query_params
+    if "state" not in params or ("code" not in params and "error" not in params):
+        return
+    values = {key: str(params[key]) for key in ("code", "state", "error") if key in params}
+    st.query_params.clear()  # the code is single-use; do not leave it in the address bar
+    config = oauth_config_from_env()
+    if config is None:
+        st.session_state["google_message"] = ("error", "Google sign-in is not set up on this server.")
+        return
+    try:
+        token = finish_login(config, get_pending_logins(), values)
+        history, channel = fetch_channel_history(token)
+    except (OAuthError, YouTubeAPIError) as error:
+        st.session_state["google_message"] = ("error", str(error))
+        return
+    revoke(token)  # the videos are copied into this session; the access itself is not needed any more
+    st.session_state["channel"] = history
+    st.session_state.pop("channel_file_id", None)
+    st.session_state["google_message"] = ("success", f"Connected to {escape_markdown(str(channel['title']))}: "
+                                                    f"{len(history.videos)} videos were read, and the app's access was cancelled again.")
+
+
+def _render_google_connect() -> None:
+    kicker("CONNECT DIRECTLY TO YOUTUBE")
+    message = st.session_state.pop("google_message", None)
+    if message:
+        (st.success if message[0] == "success" else st.error)(message[1])
+    if oauth_config_from_env() is None:
+        st.caption("Direct connection is not set up on this server. It needs a Google Cloud client (free, about 10 minutes); "
+                   "see docs/CONNECT_YOUTUBE.md. Uploading your Studio export works without it.")
+        return
+    st.markdown("<p class='muted'>Sign in with Google and the app reads the titles, dates and view counts of your own videos once, then "
+                "cancels its access straight away. It can only <b>read</b>; it cannot change anything on your channel.</p>", unsafe_allow_html=True)
+    first, second = st.columns([1, 2])
+    with first:
+        st.button("Connect with Google", on_click=start_google_login, key="google_connect", width="stretch")
+    with second:
+        if st.session_state.get("google_auth_url"):
+            st.link_button("Continue to Google →", st.session_state["google_auth_url"])
+    st.caption("Google may show an 'unverified app' notice while this app is in testing; only accounts listed as test users can continue.")
+
+
+def render_my_channel() -> None:
+    kicker("YOUR OWN YOUTUBE DATA")
+    st.markdown(
+        "<p class='muted'>The Forecast studio compares a draft with a typical <b>trending</b> video. Add your own earlier videos and "
+        "it also shows what the model expects for <b>your</b> channel: your usual level, plus how much this draft should add or lose.</p>",
+        unsafe_allow_html=True,
+    )
+    left, right = st.columns([1.7, 1])
+    with left:
+        uploaded = st.file_uploader(
+            "Upload a YouTube Studio export (the CSV, or the zipped export folder)", type=["csv", "zip"], key="channel_upload",
+            help="Needs a video title, a publish date and a view count for each video. Maximum 5 MB.",
+        )
+        if uploaded is not None and st.session_state.get("channel_file_id") != uploaded.file_id:
+            parsed = False
+            try:
+                st.session_state["channel"] = parse_upload(uploaded.name, uploaded.getvalue())
+                st.session_state["channel_file_id"] = uploaded.file_id
+                parsed = True
+            except HistoryError as error:
+                st.error(str(error))
+            if parsed:
+                st.rerun()  # the Forecast tab was already drawn in this run; redraw it with the new data
+    with right:
+        st.markdown("<div style='height:1.9rem'></div>", unsafe_allow_html=True)
+        st.button("Try the sample channel", on_click=load_sample_channel, width="stretch",
+                  help="A made-up channel with 26 videos, so you can see the feature without any account.")
+
+    _render_google_connect()
+
+    channel = st.session_state.get("channel")
+    if channel is None:
+        with st.expander("How do I get my data from YouTube Studio?", expanded=True):
+            st.markdown(
+                "1. Open **YouTube Studio**, then **Analytics**, then **Advanced mode**.\n"
+                "2. Choose the **Lifetime** date range and the **Content** tab.\n"
+                "3. Use **Export current view** and pick **CSV**. The file called **Table data.csv** is the one this app reads. "
+                "You can also upload the whole zipped export.\n\n"
+                "Menu names can differ a little between Studio versions. Any CSV with a title, a publish date and a view count also works."
+            )
+        _privacy_note()
+        return
+
+    if channel.source == "sample":
+        st.warning("This is a made-up sample channel, not real data. It is only here to show how the feature works.")
+    summary = summarise(channel)
+    first, second, third, fourth = st.columns(4)
+    first.metric("Videos loaded", f"{summary['videos']}")
+    second.metric("With settled views", f"{summary['settled_videos']}", help="Videos that are 14+ days old; younger videos are still gaining views.")
+    third.metric("Median views", compact_number(summary["median_views"]))
+    fourth.metric("Typical video (geometric mean)", compact_number(summary["typical_views"]) if summary["settled_videos"] else "n/a")
+    for note in channel.notes:
+        st.caption(note)
+
+    shown = channel.videos.sort_values("publish_time", ascending=False).head(200)
+    table = pd.DataFrame({"Video": shown["title"], "Published": shown["publish_time"].dt.strftime("%Y-%m-%d"), "Views": shown["views"].astype(int)})
+    st.dataframe(table, hide_index=True, width="stretch", height=260)
+    st.button("Remove my data", on_click=clear_channel, key="clear_channel_main")
+    with st.expander("How is this used?"):
+        st.markdown(
+            "- Your earlier videos give the model your **usual level** (the geometric mean of their views) and how steady or uneven you are.\n"
+            "- The model then predicts a **lift**: how much better or worse than your usual video this draft is likely to do, from its title, "
+            "tags, description, category and timing. Expected views = your usual level × that lift.\n"
+            "- A video only counts once its views have had **14 days** to settle, and you need **at least 3** such videos.\n"
+            "- The 80% interval comes from tests on channels the model had never seen."
+        )
+    _privacy_note()
+
+
+def _privacy_note() -> None:
+    st.caption(
+        "Privacy: your file or channel data is read in memory for this browser session only. It is not saved to disk and not written to any log. "
+        "On the online demo it is processed in that server's memory; run the app on your own computer if you want it never to leave it."
+    )
+
+
+# --------------------------------------------------------------------------- #
 # Main
 # --------------------------------------------------------------------------- #
 def main() -> None:
@@ -773,6 +992,7 @@ def main() -> None:
 
     categories = list(bundle["categories"])
     init_state(categories)
+    handle_google_callback()
 
     st.markdown(
         """
@@ -795,11 +1015,17 @@ def main() -> None:
         st.write(f"**{bundle['training_rows']:,}** unique India-trending videos")
         st.write(f"Views R² **{metrics['views_log']['five_fold_cv']['r2_mean']:.2f}** · engagement R² "
                  f"**{metrics['engagement_rate']['five_fold_cv']['r2_mean']:.2f}** (5-fold CV)")
-        st.info("No likes, comments, views, channel information or thumbnail data are used as inputs.")
-        st.caption("Flow for the demo: Forecast → Why → Best time → Title lab → AI coach → Similar videos → Scenario lab.")
+        st.info("The trending-video forecast uses no likes, comments, views, channel information or thumbnail data as inputs. "
+                "If you add your own earlier videos (My channel tab), their view counts are used to personalise it.")
+        if st.session_state.get("channel") is not None:
+            st.markdown("### Your channel")
+            channel_loaded = st.session_state["channel"]
+            st.write(f"**{len(channel_loaded.videos)}** videos loaded" + (" (sample)" if channel_loaded.source == "sample" else ""))
+            st.button("Remove my data", on_click=clear_channel, width="stretch", key="clear_channel_sidebar")
+        st.caption("Flow for the demo: Forecast → My channel → Best time → Title lab → AI coach → Similar videos → Scenario lab.")
 
-    studio, timing, lab, coach, similar, scenario, method = st.tabs(
-        ["Forecast studio", "Best time", "Title lab", "AI coach", "Similar videos", "Scenario lab", "Model brief"]
+    studio, mine, timing, lab, coach, similar, scenario, method = st.tabs(
+        ["Forecast studio", "My channel", "Best time", "Title lab", "AI coach", "Similar videos", "Scenario lab", "Model brief"]
     )
 
     with studio:
@@ -811,6 +1037,8 @@ def main() -> None:
         draft = to_draft(st.session_state["proposal"])
         render_forecast(bundle, draft)
 
+    with mine:
+        render_my_channel()
     draft = to_draft(st.session_state["proposal"])
     with timing:
         render_best_time(bundle, draft)

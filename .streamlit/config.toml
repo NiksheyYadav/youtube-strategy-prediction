@@ -10,3 +10,4 @@ font = "serif"
 headless = true
 enableCORS = false
 enableXsrfProtection = true
+maxUploadSize = 10  # MB; the channel-data parser accepts at most 5 MB

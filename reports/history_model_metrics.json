@@ -1,0 +1,35 @@
+{
+  "metrics": {
+    "videos_total": 16307,
+    "videos_with_history": 12632,
+    "min_usable_videos": 3,
+    "unseen_channels": {
+      "log_views_r2_history_model": 0.5758296252525911,
+      "log_views_r2_cold_start_model": 0.14545188076305748,
+      "log_views_mae_history_model": 0.6157824797694466,
+      "log_views_mae_cold_start_model": 0.9411500149147218,
+      "engagement_r2_history_model": 0.7280917435855399,
+      "engagement_r2_cold_start_model": 0.402495780542497
+    },
+    "later_videos": {
+      "log_views_r2_history_model": 0.6066123830040404,
+      "engagement_r2_history_model": 0.6997945317930068
+    },
+    "interval_coverage_80": {
+      "views_unseen_channels": 0.800110829639012,
+      "views_later_videos": 0.8120300751879699,
+      "engagement_later_videos": 0.850019786307875
+    }
+  },
+  "calibration": {
+    "views_log_q": 0.9949684744445193,
+    "engagement_q": 0.547531072191544,
+    "coverage_target": 0.8,
+    "calibrated_on": "out-of-fold predictions for channels never seen in training"
+  },
+  "notes": [
+    "Trained on trending videos only: the lift for creators who never trend is untested.",
+    "History must contain at least 3 earlier videos whose views were already settled."
+  ],
+  "trained_rows": 12632
+}

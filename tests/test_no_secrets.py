@@ -14,6 +14,9 @@ SECRET_PATTERNS = {
     "GitHub token": re.compile(r"\bgh[pousr]_[A-Za-z0-9]{30,}"),
     "AWS access key id": re.compile(r"\bAKIA[0-9A-Z]{16}\b"),
     "Google API key": re.compile(r"\bAIza[0-9A-Za-z_-]{35}\b"),
+    "Google OAuth client secret": re.compile(r"\bGOCSPX-[A-Za-z0-9_-]{28}\b"),
+    "Google OAuth access token": re.compile(r"\bya29\.[A-Za-z0-9_-]{50,}"),
+    "Google OAuth refresh token": re.compile(r"\b1//[A-Za-z0-9_-]{40,}"),
     "private key block": re.compile(r"-----BEGIN (?:RSA |EC |OPENSSH |)PRIVATE KEY-----"),
     "hard-coded secret assignment": re.compile(
         r"""(?i)\b(?:api[_-]?key|secret|token|password)\b\s*[:=]\s*["'][A-Za-z0-9_\-]{24,}["']"""

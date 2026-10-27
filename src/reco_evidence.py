@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from src.channel_history import ChannelHistory, sanitise_text, summarise
 from src.inference import Prediction, global_feature_groups, predict_video
 from src.insights import (
     Draft,
@@ -20,6 +21,7 @@ from src.insights import (
     suggest_edits,
     time_grid,
 )
+from src.personal_forecast import PersonalForecast, own_patterns
 
 DATASET_LIMIT = (
     "The data holds only India-trending videos (2017-2018): it estimates relative performance among videos that "
@@ -74,7 +76,14 @@ class EvidencePacket:
         }
 
 
-def build_evidence(bundle: dict[str, object], draft: Draft, similarity_index: dict | None = None) -> EvidencePacket:
+def build_evidence(
+    bundle: dict[str, object],
+    draft: Draft,
+    similarity_index: dict | None = None,
+    *,
+    personal: PersonalForecast | None = None,
+    channel: ChannelHistory | None = None,
+) -> EvidencePacket:
     prediction = predict_video(
         bundle, title=draft.title, tags=draft.tags, description=draft.description,
         category_name=draft.category_name, day_of_week=draft.day_of_week, publish_hour=draft.publish_hour,
@@ -155,6 +164,31 @@ def build_evidence(bundle: dict[str, object], draft: Draft, similarity_index: di
         if similar.analog_median_views:
             add("analogs", f"{similar.analogs_used} look-alike trending videos have median {_compact(similar.analog_median_views)} views "
                 f"(model forecast {_compact(prediction.expected_views)}).", analog_median=similar.analog_median_views)
+
+    # 8. The creator's own history (only when they added it; every number comes from code, titles are sanitised text)
+    gates["channel"] = False
+    if personal is not None and personal.prediction is not None:
+        mine = personal.prediction
+        add("channel_forecast",
+            f"For your channel (based on {mine.n_videos_used} of your videos with settled views) the model expects "
+            f"{_compact(mine.expected_views)} views (80% interval {_compact(mine.views_ci_low)} to {_compact(mine.views_ci_high)}). "
+            f"Your usual video gets about {_compact(mine.channel_level_views)} views, so this draft is expected to do "
+            f"{(mine.lift_multiplier - 1) * 100:+.0f}% versus your usual.",
+            expected_views=mine.expected_views, lift_multiplier=mine.lift_multiplier)
+        gates["channel"] = True
+        if channel is not None:
+            overview = summarise(channel)
+            if overview["videos"] >= 5:
+                best = "; ".join(f"'{sanitise_text(title, 80)}' ({_compact(views)} views)" for title, views in overview["top_titles"])
+                add("channel_best", f"Your three most-viewed videos so far: {best}.", titles=[t for t, _ in overview["top_titles"]])
+            for pattern in own_patterns(channel):
+                add("channel_pattern",
+                    f"In your own videos, {pattern['label']} goes with a median of {_compact(pattern['median_with'])} views "
+                    f"(n={pattern['n_with']}) versus {_compact(pattern['median_without'])} (n={pattern['n_without']}) without it. "
+                    "This is a pattern in your history, not proof of cause.", label=pattern["label"], ratio=pattern["ratio"])
+        add("channel_limits",
+            f"The channel forecast is experimental: it combines a model trained on trending videos with {mine.n_videos_used} of your videos, "
+            "and its 80% interval was tested on channels the model had never seen.")
 
     add("limits", DATASET_LIMIT)
     return EvidencePacket(draft=draft, prediction=prediction, facts=tuple(facts), gates=gates)

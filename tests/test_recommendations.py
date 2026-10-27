@@ -15,6 +15,7 @@ from src.inference import load_bundle, predict_video
 from src.insights import Draft
 from src.llm_client import LLMConfig
 from src.reco_evidence import build_evidence
+from src.reco_schema import validate_recommendation
 from src.recommendations import RuntimeStatus, build_messages, generate_recommendation, resolve_runtime, rules_recommendation
 from src.ui_text import escape_markdown
 
@@ -89,3 +90,12 @@ def test_non_objects_and_over_long_passages_are_still_rejected_or_dropped():
         normalise_llm_answer(["not", "an", "object"])
     fixed = normalise_llm_answer({"summary": "x" * 700, "priority_explanations": ["y" * 400, "short ok"]})
     assert fixed["summary"] == "" and fixed["priority_explanations"] == ["short ok"]
+
+
+def test_rules_never_suggest_a_title_that_only_changes_the_capital_letters(bundle):
+    """Regression: 'Study Tips For Students' was offered for 'Study tips for students' and failed the validator."""
+    draft = Draft("Study tips for students", "study|tips", "Simple tips for exams.", "Education", 1, 18)
+    packet = build_evidence(bundle, draft)
+    recommendation = rules_recommendation(packet)
+    assert validate_recommendation(recommendation, packet) == []
+    assert all(item["title"].strip().lower() != draft.title.lower() for item in recommendation["title_alternatives"])
