@@ -22,7 +22,9 @@ from src.insights import (
     time_grid,
 )
 from src.personal_forecast import PersonalForecast, own_patterns
+from src.platform_knowledge import fact_text, select_entries, view_count_note
 
+TRAINING_PERIOD = "India 2017-2018"  # keep in step with DATASET_LIMIT and the training data
 DATASET_LIMIT = (
     "The data holds only India-trending videos (2017-2018): it estimates relative performance among videos that "
     "already trended, not whether an arbitrary upload will go viral, and it cannot see thumbnails, channel size, "
@@ -165,7 +167,17 @@ def build_evidence(
             add("analogs", f"{similar.analogs_used} look-alike trending videos have median {_compact(similar.analog_median_views)} views "
                 f"(model forecast {_compact(prediction.expected_views)}).", analog_median=similar.analog_median_views)
 
-    # 8. The creator's own history (only when they added it; every number comes from code, titles are sanitised text)
+    # 8. Sourced platform knowledge (what YouTube has published; each fact says where it comes from)
+    gates["platform"] = False
+    try:
+        for entry in select_entries(gates):
+            add("platform", fact_text(entry), kb_id=entry.id, url=entry.source["url"], source_type=entry.source_type)
+        add("platform_note", view_count_note(TRAINING_PERIOD))
+        gates["platform"] = True
+    except (OSError, ValueError, KeyError):
+        pass  # the knowledge file is optional: advice simply has no platform facts
+
+    # 9. The creator's own history (only when they added it; every number comes from code, titles are sanitised text)
     gates["channel"] = False
     if personal is not None and personal.prediction is not None:
         mine = personal.prediction

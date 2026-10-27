@@ -1,0 +1,198 @@
+{
+  "about": "Documented, sourced changes and statements about how YouTube recommends and counts videos (2012-2026), plus peer-reviewed work on YouTube's recommender. This is what YouTube and researchers have PUBLISHED. YouTube does not publish its ranking formula, so nothing here is 'the algorithm'.",
+  "verified_on": "2026-10-27",
+  "source_types": {
+    "official": "YouTube's own blog or Help Center page, opened and read",
+    "peer_reviewed": "Published research paper (abstract read through Consensus)",
+    "press_report": "News coverage only; no official page was read, so treat as lower confidence"
+  },
+  "entries": [
+    {
+      "id": "K01",
+      "period": "2012",
+      "date_precision": "year",
+      "topic": "recommendations",
+      "title": "Watch time added as a ranking signal",
+      "what_changed": "YouTube's own timeline of its recommendation system lists 2012 as the year it started using watch time as a signal, alongside clicks.",
+      "creator_takeaway": "Being clicked is not the only thing that counts; how long viewers keep watching matters too.",
+      "source": {"url": "https://blog.youtube/inside-youtube/on-youtubes-recommendation-system/", "title": "On YouTube's recommendation system", "publisher": "YouTube Blog (Cristos Goodrow)", "type": "official", "published": "2021-09-15"},
+      "verified": {"on": "2026-10-27", "how": "page opened and read"}
+    },
+    {
+      "id": "K02",
+      "period": "2019-01-25",
+      "date_precision": "day",
+      "topic": "recommendations",
+      "title": "Fewer recommendations for borderline content",
+      "what_changed": "YouTube said it would reduce recommendations of borderline content and content that could misinform users in harmful ways, affecting less than one percent of the content on YouTube. It changes only what is recommended, not whether a video is available. It started gradually in the United States.",
+      "creator_takeaway": "Videos close to policy lines can receive fewer recommendations even though they stay available.",
+      "source": {"url": "https://blog.youtube/news-and-events/continuing-our-work-to-improve/", "title": "Continuing our work to improve recommendations on YouTube", "publisher": "YouTube Blog (The YouTube Team)", "type": "official", "published": "2019-01-25"},
+      "verified": {"on": "2026-10-27", "how": "page opened and read"}
+    },
+    {
+      "id": "K03",
+      "period": "2020-09-14",
+      "date_precision": "day",
+      "topic": "shorts",
+      "title": "YouTube Shorts beta announced, starting in India",
+      "what_changed": "YouTube announced Shorts, a short-form video format, and said an early beta would start over the following days in India with a handful of creation tools.",
+      "creator_takeaway": "Short-form video became a separate surface for discovery; Indian creators were among the first to get it.",
+      "source": {"url": "https://blog.youtube/news-and-events/building-youtube-shorts/", "title": "Building YouTube Shorts, a new way to watch & create on YouTube", "publisher": "YouTube Blog", "type": "official", "published": "2020-09-14"},
+      "verified": {"on": "2026-10-27", "how": "page opened and read"}
+    },
+    {
+      "id": "K04",
+      "period": "2021-09-15",
+      "date_precision": "day",
+      "topic": "recommendations",
+      "title": "How YouTube says its recommendation system works",
+      "what_changed": "YouTube described the signals it uses (clicks, watch time, survey responses about satisfaction, shares, likes and dislikes), said recommendations are personalised by comparing a viewer's habits with similar viewers, that social-network connections are not used, and that there is no single fixed recipe.",
+      "creator_takeaway": "Viewer satisfaction and personal viewing history matter; no single trick controls reach.",
+      "source": {"url": "https://blog.youtube/inside-youtube/on-youtubes-recommendation-system/", "title": "On YouTube's recommendation system", "publisher": "YouTube Blog (Cristos Goodrow)", "type": "official", "published": "2021-09-15"},
+      "verified": {"on": "2026-10-27", "how": "page opened and read"}
+    },
+    {
+      "id": "K05",
+      "period": "2021-11-10",
+      "date_precision": "day",
+      "topic": "metrics",
+      "title": "Public dislike counts made private",
+      "what_changed": "YouTube made dislike counts private across the platform to reduce 'dislike attacks'. The dislike button stays, viewers can still use it to give private feedback that tunes their recommendations, and creators can still see exact counts in YouTube Studio.",
+      "creator_takeaway": "Datasets that include public dislike counts stop being possible after this date.",
+      "source": {"url": "https://blog.youtube/news-and-events/update-to-youtube/", "title": "Video Dislike Button & Count Updates", "publisher": "YouTube Blog", "type": "official", "published": "2021-11-10"},
+      "verified": {"on": "2026-10-27", "how": "page opened and read"}
+    },
+    {
+      "id": "K06",
+      "period": "2023",
+      "date_precision": "year",
+      "topic": "monetization",
+      "title": "Ad revenue sharing introduced for Shorts",
+      "what_changed": "In March 2024 YouTube wrote that it was 'marking one year since introducing revenue sharing on Shorts' and that more than 25% of channels in the YouTube Partner Program were earning through it. The post gives no exact start date, so only the year is recorded here.",
+      "creator_takeaway": "Shorts became a way to earn directly, which changed how many creators use the format.",
+      "source": {"url": "https://blog.youtube/inside-youtube/shorts-revenue-sharing-update/", "title": "Sharing your passion on YouTube pays off: An update on Shorts revenue share", "publisher": "YouTube Blog", "type": "official", "published": "2024-03-28"},
+      "verified": {"on": "2026-10-27", "how": "page opened and read; exact start date is not stated there"}
+    },
+    {
+      "id": "K07",
+      "period": "2025-03-31",
+      "date_precision": "day",
+      "topic": "metrics",
+      "title": "Shorts views redefined: every start or replay counts",
+      "what_changed": "From 31 March 2025 a Short's view count counts each time it starts to play or replays, with no minimum watch time. The earlier metric was renamed 'engaged views' in YouTube Analytics, and Partner Program eligibility and Shorts revenue sharing rely on engaged Shorts views.",
+      "creator_takeaway": "Shorts view counts before and after this date are not measured the same way.",
+      "source": {"url": "https://support.google.com/youtube/answer/10059070?hl=en", "title": "Get started creating YouTube Shorts", "publisher": "YouTube Help", "type": "official", "published": null},
+      "verified": {"on": "2026-10-27", "how": "page opened and read"}
+    },
+    {
+      "id": "K08",
+      "period": "2025-07-15",
+      "date_precision": "day",
+      "topic": "monetization",
+      "title": "Partner Program policy renamed 'inauthentic content'",
+      "what_changed": "YouTube renamed 'repetitious content' to 'inauthentic content' on 15 July 2025, to clarify that mass-produced or repetitive content is covered. It called this a minor update, said such content was always ineligible for monetisation, and said the reused-content policy did not change.",
+      "creator_takeaway": "Template-made, repetitive uploads are not eligible for monetisation.",
+      "source": {"url": "https://support.google.com/youtube/answer/1311392?hl=en", "title": "YouTube channel monetization policies", "publisher": "YouTube Help", "type": "official", "published": "2025-07-15"},
+      "verified": {"on": "2026-10-27", "how": "page opened and read"}
+    },
+    {
+      "id": "K09",
+      "period": "2025-07",
+      "date_precision": "month",
+      "topic": "trending",
+      "title": "Trending page retired",
+      "what_changed": "News outlets reported in July 2025 that YouTube was retiring its Trending page and Trending Now list in favour of category charts. No YouTube page was read for this entry.",
+      "creator_takeaway": "There is no public, curated trending list to collect new training data from, which limits any trending-based dataset to 2025 and earlier.",
+      "source": {"url": "https://www.storyboard18.com/brand-marketing/youtube-retires-trending-page-after-nearly-a-decade-75844.htm", "title": "YouTube retires Trending Page after nearly a decade", "publisher": "Storyboard18 (press)", "type": "press_report", "published": "2025-07"},
+      "verified": {"on": "2026-10-27", "how": "search result summaries of press coverage only; no official page read"}
+    },
+    {
+      "id": "K10",
+      "period": "2026-08-24",
+      "date_precision": "day",
+      "topic": "metrics",
+      "title": "Views counted from the first frame for all formats",
+      "what_changed": "From 24 August 2026 YouTube counts views from the first frame for Shorts, long-form video, podcasts and live. The previous standard is now called an 'engaged view' and still decides monetisation, Partner Program eligibility and metrics such as click-through rate, average view duration and retention. YouTube says recommendations are unchanged.",
+      "creator_takeaway": "Raw view totals before and after this date are not measured the same way, so compare them with care.",
+      "source": {"url": "https://blog.youtube/inside-youtube/engaged-views-youtube-explained/", "title": "What are 'Engaged' Views on YouTube?", "publisher": "YouTube Blog", "type": "official", "published": "2026-08-19"},
+      "verified": {"on": "2026-10-27", "how": "page opened and read"}
+    },
+    {
+      "id": "K11",
+      "period": "undated",
+      "date_precision": "undated",
+      "topic": "recommendations",
+      "title": "What YouTube's Help Center says drives recommendations",
+      "what_changed": "YouTube says ranking reflects how viewers respond when a video is recommended to them. Watch time is a signal: relative watch time matters more for short videos and absolute watch time for long ones. Likes and dislikes are one of hundreds of signals. Home recommendations combine performance with the viewer's watch and search history.",
+      "creator_takeaway": "Hold attention and satisfy viewers; a title that gets clicks but loses viewers works against you.",
+      "source": {"url": "https://support.google.com/youtube/answer/141805?hl=en", "title": "YouTube performance FAQ & Troubleshooting", "publisher": "YouTube Help", "type": "official", "published": null},
+      "verified": {"on": "2026-10-27", "how": "page opened and read; the page carries no date"}
+    },
+    {
+      "id": "K12",
+      "period": "undated",
+      "date_precision": "undated",
+      "topic": "packaging",
+      "title": "Titles and thumbnails: accurate and compelling, not misleading",
+      "what_changed": "YouTube says changing a title or thumbnail may affect ranking only because viewers respond differently, recommends accurate and compelling titles and thumbnails, and warns that deceptive, misleading or sensational ones can turn viewers away and may break guidelines.",
+      "creator_takeaway": "Packaging should promise what the video delivers.",
+      "source": {"url": "https://support.google.com/youtube/answer/141805?hl=en", "title": "YouTube performance FAQ & Troubleshooting", "publisher": "YouTube Help", "type": "official", "published": null},
+      "verified": {"on": "2026-10-27", "how": "page opened and read; the page carries no date"}
+    },
+    {
+      "id": "K13",
+      "period": "undated",
+      "date_precision": "undated",
+      "topic": "timing",
+      "title": "Upload frequency is not a requirement",
+      "what_changed": "YouTube says growth in views is not correlated with the time between uploads and that creators do not need to upload daily or weekly.",
+      "creator_takeaway": "Do not force a schedule at the cost of quality; the Help page speaks about gaps between uploads, not about the hour of the day.",
+      "source": {"url": "https://support.google.com/youtube/answer/141805?hl=en", "title": "YouTube performance FAQ & Troubleshooting", "publisher": "YouTube Help", "type": "official", "published": null},
+      "verified": {"on": "2026-10-27", "how": "page opened and read; the page carries no date"}
+    },
+    {
+      "id": "K14",
+      "period": "undated",
+      "date_precision": "undated",
+      "topic": "tools",
+      "title": "Title and thumbnail testing judged by watch time share",
+      "what_changed": "In YouTube Studio on a computer, creators can test and compare up to three titles and thumbnails. YouTube says it optimises these tests for overall watch time rather than click-through rate, and results usually arrive within two weeks. The page gives no launch date.",
+      "creator_takeaway": "YouTube's own testing tool rewards the version that holds viewers, not just the one that gets clicks.",
+      "source": {"url": "https://support.google.com/youtube/answer/13861714?hl=en-GB", "title": "A/B test titles & thumbnails", "publisher": "YouTube Help", "type": "official", "published": null},
+      "verified": {"on": "2026-10-27", "how": "page opened and read; no launch date on the page"}
+    },
+    {
+      "id": "K15",
+      "period": "2016",
+      "date_precision": "year",
+      "topic": "research",
+      "title": "Two-stage deep learning recommender at YouTube",
+      "what_changed": "Covington, Adams and Sargin (RecSys 2016) describe YouTube's recommender as two stages: a deep candidate-generation model that narrows millions of videos to hundreds, and a deep ranking model that scores them.",
+      "creator_takeaway": "Recommendation is a long pipeline of learned models, not a single rule.",
+      "source": {"url": "https://consensus.app/papers/details/c58f3b5c0dda5d61862bfbd81e3585e8/", "title": "Deep Neural Networks for YouTube Recommendations", "publisher": "ACM RecSys 2016 (via Consensus)", "type": "peer_reviewed", "published": "2016"},
+      "verified": {"on": "2026-10-27", "how": "abstract read through Consensus"}
+    },
+    {
+      "id": "K16",
+      "period": "2019",
+      "date_precision": "year",
+      "topic": "research",
+      "title": "Multi-objective ranking of what to watch next",
+      "what_changed": "Zhao et al. (RecSys 2019) describe a large-scale ranking system that optimises several objectives at once and corrects selection bias in viewer feedback, using multi-gate mixture-of-experts and a wide-and-deep design.",
+      "creator_takeaway": "Ranking balances several goals (for example engagement and satisfaction) instead of a single number.",
+      "source": {"url": "https://consensus.app/papers/details/fe18f85fbe3450ebbada48ecd3cc6129/", "title": "Recommending what video to watch next: a multitask ranking system", "publisher": "ACM RecSys 2019 (via Consensus)", "type": "peer_reviewed", "published": "2019"},
+      "verified": {"on": "2026-10-27", "how": "abstract read through Consensus"}
+    },
+    {
+      "id": "K17",
+      "period": "2026",
+      "date_precision": "year",
+      "topic": "research",
+      "title": "Popularity-prediction models drift as the platform changes",
+      "what_changed": "A 2026 systematic review of machine-learning work on YouTube popularity reports that models which are not updated can lose accuracy over time (about 5 percent over three years) and that the strongest results use multimodal features and early engagement signals.",
+      "creator_takeaway": "A model trained on old data should be retrained and re-tested as the platform changes.",
+      "source": {"url": "https://consensus.app/papers/details/e66cd826c4ce5abf9f8744ebaa92c0f4/", "title": "A Systematic Literature Review of Machine Learning Methods for Youtube Popularity Prediction", "publisher": "ICETES 2026 (via Consensus)", "type": "peer_reviewed", "published": "2026"},
+      "verified": {"on": "2026-10-27", "how": "abstract read through Consensus"}
+    }
+  ]
+}

@@ -31,6 +31,7 @@ from src.insights import (
 
 from src.env_file import load_env_file
 from src.personal_forecast import personal_forecast
+from src.platform_knowledge import SOURCE_TYPES, date_label, load_timeline
 from src.recommendations import generate_recommendation, resolve_runtime
 from src.ui_text import escape_markdown
 from src.youtube_api import YouTubeAPIError, fetch_channel_history
@@ -834,6 +835,38 @@ def render_coach(bundle: dict[str, object], draft: Draft) -> None:
 
 
 # --------------------------------------------------------------------------- #
+# Tab: YouTube timeline (sourced knowledge)
+# --------------------------------------------------------------------------- #
+def render_platform_timeline() -> None:
+    kicker("WHAT HAS CHANGED ON YOUTUBE · EVERY ENTRY SOURCED")
+    st.markdown(
+        "<p class='muted'>Documented changes and statements about how YouTube recommends and counts videos, collected from YouTube's own pages "
+        "and research papers. This is what has been <b>published</b>: YouTube does not publish its ranking formula, so none of this is "
+        "'the algorithm'. Entries from news reports are marked as lower confidence.</p>", unsafe_allow_html=True,
+    )
+    try:
+        entries = load_timeline()
+    except (OSError, ValueError):
+        st.info("The knowledge file is not available on this server.")
+        return
+    first, second = st.columns([2, 1])
+    with first:
+        topics = st.multiselect("Topic", sorted({entry.topic for entry in entries}), key="kb_topics", placeholder="All topics")
+    with second:
+        hide_press = st.checkbox("Hide press reports", key="kb_hide_press")
+    shown = [e for e in entries if (not topics or e.topic in topics) and not (hide_press and e.source_type == "press_report")]
+    st.caption(f"{len(shown)} of {len(entries)} entries · last checked against the sources on {max(e.verified['on'] for e in entries)}")
+    for entry in shown:
+        st.markdown(
+            f"**{date_label(entry)} · {esc(entry.title)}**  \n{esc(entry.what_changed)}  \n"
+            f"*For creators:* {esc(entry.creator_takeaway)}  \n"
+            f"Source: [{esc(entry.source['publisher'])}: {esc(entry.source['title'])}]({entry.source['url']}) · "
+            f"{SOURCE_TYPES[entry.source_type]} · {esc(entry.verified['how'])}"
+        )
+        st.divider()
+
+
+# --------------------------------------------------------------------------- #
 # Tab: My channel
 # --------------------------------------------------------------------------- #
 SAMPLE_CHANNEL_PATH = Path(__file__).resolve().parent / "sample_data" / "sample_channel.csv"
@@ -1022,10 +1055,10 @@ def main() -> None:
             channel_loaded = st.session_state["channel"]
             st.write(f"**{len(channel_loaded.videos)}** videos loaded" + (" (sample)" if channel_loaded.source == "sample" else ""))
             st.button("Remove my data", on_click=clear_channel, width="stretch", key="clear_channel_sidebar")
-        st.caption("Flow for the demo: Forecast → My channel → Best time → Title lab → AI coach → Similar videos → Scenario lab.")
+        st.caption("Flow for the demo: Forecast → My channel → Best time → Title lab → AI coach → Similar videos → Scenario lab → YouTube timeline.")
 
-    studio, mine, timing, lab, coach, similar, scenario, method = st.tabs(
-        ["Forecast studio", "My channel", "Best time", "Title lab", "AI coach", "Similar videos", "Scenario lab", "Model brief"]
+    studio, mine, timing, lab, coach, similar, scenario, platform, method = st.tabs(
+        ["Forecast studio", "My channel", "Best time", "Title lab", "AI coach", "Similar videos", "Scenario lab", "YouTube timeline", "Model brief"]
     )
 
     with studio:
@@ -1050,6 +1083,8 @@ def main() -> None:
         render_similar(bundle, draft)
     with scenario:
         render_scenario(bundle, categories, draft)
+    with platform:
+        render_platform_timeline()
     with method:
         render_method(bundle)
 

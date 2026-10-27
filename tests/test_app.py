@@ -23,7 +23,7 @@ def _button(app: AppTest, label: str):
 def test_app_boots_with_every_tab_and_no_exception(app):
     assert not app.exception
     assert [tab.label for tab in app.tabs] == [
-        "Forecast studio", "My channel", "Best time", "Title lab", "AI coach", "Similar videos", "Scenario lab", "Model brief",
+        "Forecast studio", "My channel", "Best time", "Title lab", "AI coach", "Similar videos", "Scenario lab", "YouTube timeline", "Model brief",
     ]
     metrics = {metric.label: metric.value for metric in app.metric}
     assert metrics["Expected views"] and metrics["Expected engagement"]
@@ -188,3 +188,14 @@ def test_a_failed_or_declined_sign_in_shows_a_plain_message_and_loads_nothing(mo
     assert not app.exception
     assert "channel" not in app.session_state
     assert any("chose not to give access" in error.value for error in app.error)
+
+
+def test_youtube_timeline_tab_lists_sourced_entries_and_can_hide_press_reports(app):
+    text = " ".join(markdown.value for markdown in app.markdown)
+    assert "24 Aug 2026" in text and "Source: [YouTube Blog" in text, "entries must show a date and link to their source"
+    assert "press report (lower confidence)" in text
+    assert "does not publish its ranking formula" in text
+    app.checkbox(key="kb_hide_press").check()
+    app.run()
+    assert not app.exception
+    assert "press report (lower confidence)" not in " ".join(markdown.value for markdown in app.markdown)
