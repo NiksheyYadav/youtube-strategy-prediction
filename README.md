@@ -52,7 +52,7 @@ R² is the share of the spread in results that the model explains (1.0 perfect, 
 
 - **No look-ahead:** an earlier video only counts as history for a new one if its views were already known when the new one was published.
 - **No leakage:** views, likes, comments, channel and video ID are never inputs (likes and comments only build the engagement target; videos with ratings or comments switched off are left out of that target).
-- **Private by default:** your data lives in memory for the browser session only. It is not written to disk or logs.
+- **Private by default:** your data lives in memory for the browser session only. It is not written to disk or logs. On your own computer you can opt in to **Keep me connected**: only Google's read-only permission slip is saved (in your user folder, never your videos), only for visitors on that same computer, and **Disconnect** removes it.
 - **No pretend model:** the language model is real and local, or absent; the app says which.
 
 ## Tests

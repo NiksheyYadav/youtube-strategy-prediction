@@ -1,8 +1,11 @@
 """Google sign-in (OAuth 2.0 authorization-code flow with PKCE) so a creator can connect their own YouTube channel.
 
 Design, in plain words:
-* Only the read-only YouTube scope is requested.  ``access_type=online``: Google gives a short-lived access token and no
-  refresh token, so nothing long-lived is ever stored.  When the token expires the creator simply connects again.
+* Only the read-only YouTube scope is requested.  By default ``access_type=online``: Google gives a short-lived access token
+  and no refresh token, so nothing long-lived exists.
+* Optional "stay connected" (only for a local run, see ``connection_store``): ``access_type=offline`` also returns a refresh
+  token, which the app keeps in a private file on that computer so the next visit needs no new sign-in.  It can be cancelled
+  at any time (``revoke_grant``).
 * PKCE (S256) and a random single-use ``state`` protect the redirect.  Streamlit loses its session when the browser goes
   to Google and comes back, so pending logins are kept in a small in-memory store, keyed by ``state``.  There is no time limit on finishing the sign-in
   (take as long as you like on Google's screen); an entry is removed when it is used, and only the oldest are dropped if more
@@ -47,6 +50,10 @@ class OAuthError(Exception):
     """A sign-in problem, worded for the person using the app (never contains a code, token or secret)."""
 
 
+class SavedConnectionEnded(OAuthError):
+    """Google no longer accepts the saved permission (cancelled in the Google account, or ended by Google): connect again."""
+
+
 @dataclass(frozen=True)
 class OAuthConfig:
     client_id: str
@@ -58,6 +65,7 @@ class OAuthConfig:
 class TokenSet:
     access_token: str = field(repr=False)  # repr=False: a token must never end up in a log line by accident
     expires_at: float
+    refresh_token: str | None = field(default=None, repr=False)  # only present when the sign-in asked for offline access
 
     def expired(self, now: float | None = None) -> bool:
         return (time.time() if now is None else now) >= self.expires_at
@@ -116,15 +124,17 @@ def _challenge(verifier: str) -> str:
     return base64.urlsafe_b64encode(hashlib.sha256(verifier.encode("ascii")).digest()).rstrip(b"=").decode("ascii")
 
 
-def begin_login(config: OAuthConfig, pending: PendingLogins) -> str:
-    """The Google address to send the creator to; remembers the PKCE verifier under a fresh ``state``."""
+def begin_login(config: OAuthConfig, pending: PendingLogins, *, offline: bool = False) -> str:
+    """The Google address to send the creator to; remembers the PKCE verifier under a fresh ``state``.
+
+    ``offline=True`` also asks for a refresh token ("stay connected"); Google then always shows its permission screen."""
     state = secrets.token_urlsafe(32)
     verifier = secrets.token_urlsafe(64)
     pending.put(state, verifier)
     query = urlencode({
         "client_id": config.client_id, "redirect_uri": config.redirect_uri, "response_type": "code", "scope": SCOPE,
         "state": state, "code_challenge": _challenge(verifier), "code_challenge_method": "S256",
-        "access_type": "online", "prompt": "select_account",
+        "access_type": "offline" if offline else "online", "prompt": "select_account consent" if offline else "select_account",
     })
     return f"{AUTH_URL}?{query}"
 
@@ -167,7 +177,53 @@ def finish_login(
     if SCOPE not in granted:
         raise OAuthError("Access to your YouTube videos was not granted, so nothing was connected.")
     lifetime = float(body.get("expires_in", 3600))
-    return TokenSet(access_token=str(body["access_token"]), expires_at=(time.time() if now is None else now) + max(lifetime - 60, 0))
+    refresh = str(body["refresh_token"]) if body.get("refresh_token") else None
+    return TokenSet(access_token=str(body["access_token"]), expires_at=(time.time() if now is None else now) + max(lifetime - 60, 0),
+                    refresh_token=refresh)
+
+
+def refresh_access_token(
+    config: OAuthConfig,
+    refresh_token: str,
+    *,
+    post: Callable[..., requests.Response] | None = None,
+    now: float | None = None,
+) -> TokenSet:
+    """A fresh short-lived access token from a saved refresh token (no sign-in screen).
+
+    Raises ``SavedConnectionEnded`` when Google says the permission is gone, so the caller can forget the saved file; any other
+    problem (no internet, a Google hiccup) is a plain ``OAuthError`` and the saved permission is kept."""
+    post = post or requests.post
+    data = {"client_id": config.client_id, "refresh_token": refresh_token, "grant_type": "refresh_token"}
+    if config.client_secret:
+        data["client_secret"] = config.client_secret
+    try:
+        response = post(TOKEN_URL, data=data, timeout=HTTP_TIMEOUT_S)
+    except requests.RequestException as error:
+        raise OAuthError("Could not reach Google to renew your saved connection. Check the internet connection and try again.") from error
+    try:
+        body = response.json()
+    except ValueError:
+        body = {}
+    if response.status_code != 200 or "access_token" not in body:
+        if str(body.get("error", "")) in {"invalid_grant", "invalid_client", "unauthorized_client"}:
+            raise SavedConnectionEnded("Google no longer accepts your saved connection (it was cancelled, or Google ended it). "
+                                       "Please connect again.")
+        raise OAuthError("Google could not renew your saved connection just now. Please try again in a moment.")
+    lifetime = float(body.get("expires_in", 3600))
+    return TokenSet(access_token=str(body["access_token"]), expires_at=(time.time() if now is None else now) + max(lifetime - 60, 0),
+                    refresh_token=refresh_token)
+
+
+def revoke_grant(refresh_token: str, *, post: Callable[..., requests.Response] | None = None) -> bool:
+    """Cancel the whole permission at Google (the saved refresh token and every access token made from it).
+
+    Returns True when Google confirmed.  Failures are reported, not hidden, because the person asked to disconnect."""
+    try:
+        reply = (post or requests.post)(REVOKE_URL, data={"token": refresh_token}, timeout=HTTP_TIMEOUT_S)
+    except requests.RequestException:
+        return False
+    return getattr(reply, "status_code", 0) == 200
 
 
 def revoke(token: TokenSet, *, post: Callable[..., requests.Response] | None = None) -> None:

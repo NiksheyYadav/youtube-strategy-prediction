@@ -123,7 +123,7 @@ R² is the share of the spread in results that the model explains. 1.0 is perfec
 ## 6. Your own data, privacy and the Google connection
 
 - **Upload**: works with no setup. The file is read in memory for your browser session, not saved to disk and not written to a log. **Remove my data** really forgets it (including the uploaded file).
-- **Connect with Google**: needs a one-time setup in your Google Cloud account (about 10 minutes, free). Follow [CONNECT_YOUTUBE.md](CONNECT_YOUTUBE.md). It asks for read-only access (`youtube.readonly`), reads your videos once and cancels its own access straight away. Put the client ID and secret in a git-ignored `.env` file (copy `.env.example`), never in chat or in git.
+- **Connect with Google**: needs a one-time setup in your Google Cloud account (about 10 minutes, free). Follow [CONNECT_YOUTUBE.md](CONNECT_YOUTUBE.md). It asks for read-only access (`youtube.readonly`), reads your videos once and cancels its own access straight away. On your own computer, **Keep me connected** (setting `GOOGLE_STAY_CONNECTED=1` in `.env`) saves only Google's read-only permission slip in your user folder so your channel loads automatically on every visit; **Disconnect from Google** removes it. It never works on the hosted website or for visitors from another device. Put the client ID and secret in a git-ignored `.env` file (copy `.env.example`), never in chat or in git.
 - On the hosted website your data passes through that server's memory. If you want it never to leave your computer, run the app locally.
 - YouTube's rules for API data: it may not be stored for more than 30 days or turned into a new dataset. The app keeps nothing, so it stays within that.
 
@@ -202,5 +202,6 @@ For a reliable wake-up, use a free outside monitor (needs your own account):
 | "Remove my data" seems to do nothing | Old browser tab | Reload the page. (A bug that kept an uploaded file after removal was fixed.) |
 | The AI coach says no local model is running | Ollama is not running or no model is installed | `ollama pull qwen2.5:3b`, or run the launcher again |
 | Sign in with Google says it is "not set up on this server" | No Google client settings | Follow CONNECT_YOUTUBE.md, or just upload a file instead |
+| "Google no longer accepts your saved connection" | You removed it in your Google account, or Google's testing mode ended it (7 days) | Press Connect with Google again; to avoid the 7-day limit set the Google app to "In production" |
 | Tests are skipped | The data file or Ollama or Playwright is missing | The skip reason says which; install it or ignore |
 | Hindi or Tamil title shows a yellow warning | The model is weak on those scripts (R² about 0.02) | Trust category and timing, not the title forecast |

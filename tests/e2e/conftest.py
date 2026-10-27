@@ -7,6 +7,7 @@ They skip themselves, with a reason, when Playwright or Chrome/Edge is not insta
 
 from __future__ import annotations
 
+import os
 import socket
 import subprocess
 import sys
@@ -38,13 +39,17 @@ def _free_port() -> int:
 
 
 @pytest.fixture(scope="session")
-def app_url():
-    """The app, started exactly as a user would start it, on a free port that only this computer can reach."""
+def app_url(tmp_path_factory):
+    """The app, started exactly as a user would start it, on a free port that only this computer can reach.
+
+    The saved-Google-permission file is pointed at an empty throw-away location, so these tests can never pick up (or touch) the
+    owner's real "keep me connected" file."""
     port = _free_port()
+    environment = {**os.environ, "SIGNAL_STUDIO_CONNECTION_FILE": str(tmp_path_factory.mktemp("connection") / "google_connection.json")}
     process = subprocess.Popen(
         [sys.executable, "-m", "streamlit", "run", "app.py", "--server.port", str(port), "--server.address", "127.0.0.1",
          "--server.headless", "true", "--browser.gatherUsageStats", "false"],
-        cwd=ROOT, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        cwd=ROOT, env=environment, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
     )
     url = f"http://127.0.0.1:{port}"
     try:

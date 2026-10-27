@@ -36,7 +36,18 @@ from src.platform_knowledge import SOURCE_TYPES, date_label, load_timeline
 from src.recommendations import generate_recommendation, resolve_runtime
 from src.ui_text import escape_markdown
 from src.youtube_api import YouTubeAPIError, fetch_channel_history
-from src.youtube_oauth import OAuthError, PendingLogins, begin_login, finish_login, oauth_config_from_env, revoke
+from src import connection_store
+from src.youtube_oauth import (
+    OAuthError,
+    PendingLogins,
+    SavedConnectionEnded,
+    begin_login,
+    finish_login,
+    oauth_config_from_env,
+    refresh_access_token,
+    revoke,
+    revoke_grant,
+)
 
 load_env_file()  # optional ./.env settings (LLM model, Google sign-in); real environment variables always win
 
@@ -930,15 +941,27 @@ def clear_channel() -> None:
     st.session_state["upload_generation"] = st.session_state.get("upload_generation", 0) + 1
 
 
+def stay_connected_available() -> bool:
+    """'Keep me connected' exists only for a run on the owner's own computer: the setting must be on AND the visitor must be on
+    this same computer.  On the shared website neither is true, so one visitor can never see another's saved channel."""
+    try:
+        address = st.context.ip_address
+    except Exception:  # no request context
+        address = None
+    return oauth_config_from_env() is not None and connection_store.stay_connected_allowed(address)
+
+
 def start_google_login() -> None:
     """Callback for the 'Connect with Google' button: prepare the Google address to continue to."""
     config = oauth_config_from_env()
     if config is not None:
-        st.session_state["google_auth_url"] = begin_login(config, get_pending_logins())
+        offline = stay_connected_available() and bool(st.session_state.get("stay_connected", True))
+        st.session_state["google_auth_url"] = begin_login(config, get_pending_logins(), offline=offline)
 
 
 def handle_google_callback() -> None:
-    """Google sends the creator back here with ?code=...&state=...: read their videos once, then cancel the access."""
+    """Google sends the creator back here with ?code=...&state=...: read their videos, then either keep the connection (only when
+    the creator chose to, on their own computer) or cancel the access straight away."""
     params = st.query_params
     if "state" not in params or ("code" not in params and "error" not in params):
         return
@@ -948,17 +971,68 @@ def handle_google_callback() -> None:
     if config is None:
         st.session_state["google_message"] = ("error", "Google sign-in is not set up on this server.")
         return
+    token = None
     try:
         token = finish_login(config, get_pending_logins(), values)
         history, channel = fetch_channel_history(token)
     except (OAuthError, YouTubeAPIError) as error:
+        if token is not None:
+            revoke(token)  # nothing was loaded, so do not leave a permission behind
         st.session_state["google_message"] = ("error", str(error))
         return
-    revoke(token)  # the videos are copied into this session; the access itself is not needed any more
+    title = escape_markdown(str(channel["title"]))
+    if token.refresh_token and stay_connected_available():
+        connection_store.save(token.refresh_token, config.client_id)
+        st.session_state["google_message"] = ("success", f"Connected to {title}: {len(history.videos)} videos were read. The connection is kept "
+                                                        "on this computer, so next time your channel loads by itself. Press Disconnect to remove it.")
+    else:
+        revoke(token)  # the videos are copied into this session; the access itself is not needed any more
+        st.session_state["google_message"] = ("success", f"Connected to {title}: "
+                                                        f"{len(history.videos)} videos were read, and the app's access was cancelled again.")
     st.session_state["channel"] = history
     st.session_state.pop("channel_file_id", None)
-    st.session_state["google_message"] = ("success", f"Connected to {escape_markdown(str(channel['title']))}: "
-                                                    f"{len(history.videos)} videos were read, and the app's access was cancelled again.")
+
+
+def auto_connect_saved_channel() -> None:
+    """Once per browser session on the owner's computer: if a saved connection exists, load the channel without any sign-in screen."""
+    if st.session_state.get("auto_connect_tried") or "google_message" in st.session_state or not stay_connected_available():
+        return
+    st.session_state["auto_connect_tried"] = True
+    config = oauth_config_from_env()
+    saved = connection_store.load(config.client_id) if config else None
+    if st.session_state.get("channel") is not None or not saved:
+        return
+    try:
+        with st.spinner("Reading your channel…"):
+            token = refresh_access_token(config, saved)
+            history, channel = fetch_channel_history(token)
+    except SavedConnectionEnded as error:
+        connection_store.forget()  # Google says it is gone: remove the dead file so it is not tried again
+        st.session_state["google_message"] = ("error", str(error))
+        return
+    except (OAuthError, YouTubeAPIError) as error:
+        st.session_state["google_message"] = ("error", f"{error} Your saved connection is kept; reload the page to try again.")
+        return
+    st.session_state["channel"] = history
+    st.session_state.pop("channel_file_id", None)
+    st.session_state["google_message"] = ("success", f"Welcome back, {escape_markdown(str(channel['title']))}: "
+                                                    f"{len(history.videos)} videos were read using your saved connection.")
+
+
+def disconnect_google() -> None:
+    """Callback: cancel the saved permission at Google, delete the saved file and forget the loaded channel."""
+    config = oauth_config_from_env()
+    saved = connection_store.load(config.client_id) if config else None
+    cancelled = revoke_grant(saved) if saved else True
+    connection_store.forget()
+    clear_channel()
+    st.session_state["auto_connect_tried"] = True
+    if cancelled:
+        st.session_state["google_message"] = ("success", "Disconnected. Google has cancelled the permission, the saved file is deleted "
+                                                        "and your channel data is forgotten.")
+    else:
+        st.session_state["google_message"] = ("error", "The saved file is deleted, but Google could not be reached to cancel the permission. "
+                                                      "Remove 'Signal Studio' under linked apps in your Google account to finish.")
 
 
 def _render_google_connect() -> None:
@@ -970,14 +1044,27 @@ def _render_google_connect() -> None:
         st.caption("Direct connection is not set up on this server. It needs a Google Cloud client (free, about 10 minutes); "
                    "see docs/CONNECT_YOUTUBE.md. Uploading your Studio export works without it.")
         return
-    st.markdown("<p class='muted'>Sign in with Google and the app reads the titles, dates and view counts of your own videos once, then "
-                "cancels its access straight away. It can only <b>read</b>; it cannot change anything on your channel.</p>", unsafe_allow_html=True)
+    stay = stay_connected_available()
+    if stay:
+        st.markdown("<p class='muted'>Sign in with Google and the app reads the titles, dates and view counts of your own videos. It can only "
+                    "<b>read</b>; it cannot change anything on your channel. If you keep the connection, a small permission file stays on "
+                    "<b>this computer</b> (never your videos), so the next time you open the app your channel loads by itself.</p>",
+                    unsafe_allow_html=True)
+        st.checkbox("Keep me connected on this computer", value=True, key="stay_connected",
+                    help=f"Saves Google's permission slip (read-only) in {connection_store.store_path()}. Untick it to read your videos once "
+                         "and cancel the access straight away. You can disconnect at any time.")
+    else:
+        st.markdown("<p class='muted'>Sign in with Google and the app reads the titles, dates and view counts of your own videos once, then "
+                    "cancels its access straight away. It can only <b>read</b>; it cannot change anything on your channel.</p>", unsafe_allow_html=True)
     first, second = st.columns([1, 2])
     with first:
         st.button("Connect with Google", on_click=start_google_login, key="google_connect", width="stretch")
     with second:
         if st.session_state.get("google_auth_url"):
             st.link_button("Continue to Google →", st.session_state["google_auth_url"])
+    if stay and connection_store.exists():
+        st.info("A saved connection exists on this computer, so your channel loads when the app opens.")
+        st.button("Disconnect from Google", on_click=disconnect_google, key="google_disconnect")
     st.caption("Google may show an 'unverified app' notice while this app is in testing; only accounts listed as test users can continue.")
 
 
@@ -1047,7 +1134,9 @@ def render_my_channel() -> None:
 def _privacy_note() -> None:
     st.caption(
         "Privacy: your file or channel data is read in memory for this browser session only. It is not saved to disk and not written to any log. "
-        "On the hosted website it is processed in that server's memory; run the app on your own computer if you want it never to leave it."
+        "The only thing that can stay on your computer is Google's read-only permission file, and only if you choose 'Keep me connected' "
+        "(never on the hosted website). On the hosted website your data is processed in that server's memory; run the app on your own "
+        "computer if you want it never to leave it."
     )
 
 
@@ -1066,6 +1155,7 @@ def main() -> None:
     categories = list(bundle["categories"])
     init_state(categories)
     handle_google_callback()
+    auto_connect_saved_channel()
 
     st.markdown(
         """

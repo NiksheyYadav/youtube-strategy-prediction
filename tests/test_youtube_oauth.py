@@ -10,11 +10,14 @@ from src.youtube_oauth import (
     OAuthConfig,
     OAuthError,
     PendingLogins,
+    SavedConnectionEnded,
     TokenSet,
     begin_login,
     finish_login,
     oauth_config_from_env,
+    refresh_access_token,
     revoke,
+    revoke_grant,
 )
 
 
@@ -179,3 +182,77 @@ def test_revoke_posts_the_token_and_ignores_network_errors():
         raise requests.Timeout()
 
     revoke(TokenSet("tok", 1.0), post=broken)  # must not raise
+
+
+# --------------------------------------------------------------------------------- stay connected (offline access + refresh)
+REFRESH = "1//" + "refresh" + "-token-that-must-never-leak"
+
+
+def test_offline_login_asks_google_for_a_refresh_token_and_the_default_does_not():
+    online = parse_qs(urlparse(begin_login(CONFIG, PendingLogins())).query)
+    offline = parse_qs(urlparse(begin_login(CONFIG, PendingLogins(), offline=True)).query)
+    assert online["access_type"] == ["online"] and online["prompt"] == ["select_account"]
+    assert offline["access_type"] == ["offline"] and offline["prompt"] == ["select_account consent"]
+    assert offline["scope"] == online["scope"] == [SCOPE], "staying connected never widens the permission: still read-only"
+    assert offline["code_challenge_method"] == ["S256"]
+
+
+def test_finish_login_keeps_the_refresh_token_when_google_sends_one_and_hides_it():
+    pending = PendingLogins()
+    _, query = _login(pending)
+    body = {"access_token": "ya29.A", "refresh_token": REFRESH, "expires_in": 3600, "scope": SCOPE}
+    token = finish_login(CONFIG, pending, {"code": "c", "state": query["state"]}, post=lambda *a, **k: FakeResponse(200, body))
+    assert token.refresh_token == REFRESH
+    assert REFRESH not in repr(token) and "ya29.A" not in repr(token)
+    _, query = _login(pending)
+    plain = finish_login(CONFIG, pending, {"code": "c", "state": query["state"]},
+                         post=lambda *a, **k: FakeResponse(200, {"access_token": "t", "expires_in": 3600, "scope": SCOPE}))
+    assert plain.refresh_token is None
+
+
+def test_refreshing_sends_the_saved_token_and_returns_a_new_short_lived_access_token():
+    sent = {}
+
+    def post(url, data=None, timeout=None):
+        sent.update(url=url, data=data, timeout=timeout)
+        return FakeResponse(200, {"access_token": "ya29.NEW", "expires_in": 3600, "scope": SCOPE})
+
+    token = refresh_access_token(CONFIG, REFRESH, post=post, now=1000.0)
+    assert sent["url"] == "https://oauth2.googleapis.com/token" and sent["timeout"] > 0
+    assert sent["data"] == {"client_id": CONFIG.client_id, "refresh_token": REFRESH, "grant_type": "refresh_token", "client_secret": SECRET}
+    assert token.access_token == "ya29.NEW" and token.expires_at == pytest.approx(1000.0 + 3540)
+    assert token.refresh_token == REFRESH
+
+
+@pytest.mark.parametrize("error", ["invalid_grant", "invalid_client", "unauthorized_client"])
+def test_a_permission_google_no_longer_accepts_is_reported_as_ended(error):
+    with pytest.raises(SavedConnectionEnded) as caught:
+        refresh_access_token(CONFIG, REFRESH, post=lambda *a, **k: FakeResponse(400, {"error": error, "error_description": "x"}))
+    assert REFRESH not in str(caught.value) and SECRET not in str(caught.value)
+
+
+def test_a_temporary_problem_is_not_mistaken_for_an_ended_connection():
+    """Otherwise a few minutes without internet would delete the saved connection."""
+    for response in (FakeResponse(500, {"error": "backend_error"}), FakeResponse(503, None), FakeResponse(200, {"no": "token"})):
+        with pytest.raises(OAuthError) as caught:
+            refresh_access_token(CONFIG, REFRESH, post=lambda *a, _r=response, **k: _r)
+        assert not isinstance(caught.value, SavedConnectionEnded)
+
+    def offline(*args, **kwargs):
+        raise requests.ConnectionError("boom with " + REFRESH)
+
+    with pytest.raises(OAuthError, match="Could not reach Google") as caught:
+        refresh_access_token(CONFIG, REFRESH, post=offline)
+    assert not isinstance(caught.value, SavedConnectionEnded) and REFRESH not in str(caught.value)
+
+
+def test_disconnecting_cancels_the_permission_at_google_and_says_whether_it_worked():
+    sent = {}
+    assert revoke_grant(REFRESH, post=lambda url, data=None, timeout=None: (sent.update(url=url, data=data), FakeResponse(200))[1]) is True
+    assert sent["url"] == "https://oauth2.googleapis.com/revoke" and sent["data"] == {"token": REFRESH}
+    assert revoke_grant(REFRESH, post=lambda *a, **k: FakeResponse(400, {"error": "invalid_token"})) is False
+
+    def broken(*args, **kwargs):
+        raise requests.Timeout()
+
+    assert revoke_grant(REFRESH, post=broken) is False, "the person asked to disconnect, so a failure must be reported, not hidden"
