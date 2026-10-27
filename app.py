@@ -100,9 +100,19 @@ def apply_style() -> None:
         .masthead h1 { font-size: clamp(2.35rem, 5.2vw, 4.8rem); letter-spacing: -.065em; line-height: .94; margin: .45rem 0 .8rem; color: #F4EEE5; }
         .masthead h1 span { color: #FF8C7B; font-style: italic; font-weight: 400; }
         .masthead p { color: #B7CFCB; font-size: 1.05rem; max-width: 52rem; margin: 0; }
-        [data-baseweb="tab-list"] { gap: 1.2rem; border-bottom: 1px solid rgba(234,245,242,.14); flex-wrap: wrap; }
-        [data-baseweb="tab"] { background: transparent; color: #A6C1BC; padding: .75rem 0; font-weight: 700; }
-        [aria-selected="true"] { color: #FF9C8C !important; }
+        /* Tab bar (Streamlit 1.65 markup: [role=tablist] > [data-testid=stTab]). All nine tabs stay visible: on a narrow
+           window they wrap onto a second row instead of being clipped behind a tiny scroll arrow. */
+        [role="tablist"] { flex-wrap: wrap; overflow: visible !important; gap: .15rem 1.7rem; padding-bottom: .15rem; }
+        [data-testid="stTab"] { height: auto; padding: .8rem .1rem .75rem; white-space: nowrap; }
+        [data-testid="stTab"] p { font-size: 1.04rem; font-weight: 700; letter-spacing: .01em; color: #C3D8D3; transition: color .15s; }
+        [data-testid="stTab"]:hover p { color: #F4EEE5; }
+        [data-testid="stTab"][aria-selected="true"] p { color: #FF9C8C; }
+        [data-testid="stTab"] .react-aria-SelectionIndicator { background-color: #FF725E; height: 3px; }
+        @media (max-width: 640px) {
+            [role="tablist"] { gap: 0 1.2rem; }
+            [data-testid="stTab"] { padding: .5rem .1rem .45rem; }
+            [data-testid="stTab"] p { font-size: 1rem; }
+        }
         [data-testid="stMetric"] { background: rgba(15,35,42,.78); border: 1px solid rgba(164,208,201,.18); border-radius: 2px; padding: 1.1rem 1.2rem; }
         [data-testid="stMetricLabel"] { color: #9FBAB5; }
         [data-testid="stMetricValue"] { color: #F4EEE5; }
