@@ -105,21 +105,30 @@ def test_a_state_can_only_be_used_once_and_unknown_states_are_rejected():
         return FakeResponse(200, {"access_token": "t", "expires_in": 3600, "scope": SCOPE})
 
     finish_login(CONFIG, pending, {"code": "c", "state": query["state"]}, post=post)
-    with pytest.raises(OAuthError, match="expired or was already used"):
+    with pytest.raises(OAuthError, match="already used, or the app was restarted"):
         finish_login(CONFIG, pending, {"code": "c", "state": query["state"]}, post=post)  # replay
-    with pytest.raises(OAuthError, match="expired or was already used"):
+    with pytest.raises(OAuthError, match="already used, or the app was restarted"):
         finish_login(CONFIG, pending, {"code": "c", "state": "forged-state"}, post=post)  # CSRF attempt
 
 
-def test_pending_logins_expire_and_are_bounded():
+def test_a_started_sign_in_never_times_out_by_default_and_the_store_is_bounded():
+    """There is no time limit on finishing the Google sign-in (a week later it still works); only the size is capped."""
+    clock = [0.0]
+    pending = PendingLogins(clock=lambda: clock[0])
+    pending.put("slow", "verifier")
+    clock[0] = 7 * 24 * 3600
+    assert pending.pop("slow") == "verifier"
+    for number in range(500):
+        pending.put(f"s{number}", "v")
+    assert len(pending) <= 200
+
+
+def test_a_time_limit_is_still_possible_when_asked_for():
     clock = [0.0]
     pending = PendingLogins(ttl_s=600, clock=lambda: clock[0])
     pending.put("old", "verifier")
     clock[0] = 601
     assert pending.pop("old") is None
-    for number in range(500):
-        pending.put(f"s{number}", "v")
-    assert len(pending) <= 200
 
 
 @pytest.mark.parametrize("params, message", [

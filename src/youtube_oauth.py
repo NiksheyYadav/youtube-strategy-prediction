@@ -4,7 +4,9 @@ Design, in plain words:
 * Only the read-only YouTube scope is requested.  ``access_type=online``: Google gives a short-lived access token and no
   refresh token, so nothing long-lived is ever stored.  When the token expires the creator simply connects again.
 * PKCE (S256) and a random single-use ``state`` protect the redirect.  Streamlit loses its session when the browser goes
-  to Google and comes back, so pending logins are kept in a small in-memory store for ten minutes, keyed by ``state``.
+  to Google and comes back, so pending logins are kept in a small in-memory store, keyed by ``state``.  There is no time limit on finishing the sign-in
+  (take as long as you like on Google's screen); an entry is removed when it is used, and only the oldest are dropped if more
+  than ``MAX_PENDING`` logins are waiting at once.
 * The access token lives only in the caller's session.  It is never logged, never put in a URL we build, and the class
   that holds it hides it from ``repr``.
 * Settings come from environment variables (see ``.env.example``); no credential is ever in the code or the repository.
@@ -28,14 +30,14 @@ SCOPE = "https://www.googleapis.com/auth/youtube.readonly"
 AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
 TOKEN_URL = "https://oauth2.googleapis.com/token"
 REVOKE_URL = "https://oauth2.googleapis.com/revoke"
-PENDING_TTL_S = 600
+PENDING_TTL_S: float | None = None  # no time limit on finishing the sign-in; pass a number of seconds to PendingLogins to add one
 MAX_PENDING = 200
 HTTP_TIMEOUT_S = 15
 DEFAULT_REDIRECT_URI = "http://localhost:8501/"
 
 _FRIENDLY = {
     "access_denied": "You chose not to give access, so nothing was connected.",
-    "invalid_grant": "That sign-in link was already used or has expired. Please start the connection again.",
+    "invalid_grant": "Google no longer accepts that sign-in (it was already used, or Google ended it). Please start the connection again.",
     "invalid_client": "Google does not recognise this app's client settings (GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET).",
     "redirect_uri_mismatch": "The redirect address does not match the one registered in Google Cloud (GOOGLE_REDIRECT_URI).",
 }
@@ -75,15 +77,17 @@ def oauth_config_from_env(env: Mapping[str, str] | None = None) -> OAuthConfig |
 
 
 class PendingLogins:
-    """In-memory, thread-safe, single-use store of ``state -> code_verifier`` that forgets entries after the TTL."""
+    """In-memory, thread-safe, single-use store of ``state -> code_verifier``.  Entries never time out unless ``ttl_s`` is given."""
 
-    def __init__(self, ttl_s: float = PENDING_TTL_S, clock: Callable[[], float] = time.time) -> None:
+    def __init__(self, ttl_s: float | None = PENDING_TTL_S, clock: Callable[[], float] = time.time) -> None:
         self._ttl = ttl_s
         self._clock = clock
         self._items: dict[str, tuple[str, float]] = {}
         self._lock = threading.Lock()
 
     def _purge(self) -> None:
+        if self._ttl is None:
+            return
         now = self._clock()
         for state in [s for s, (_, created) in self._items.items() if now - created > self._ttl]:
             del self._items[state]
@@ -96,7 +100,7 @@ class PendingLogins:
             self._items[state] = (verifier, self._clock())
 
     def pop(self, state: str) -> str | None:
-        """The verifier for ``state`` (removing it, so a state can be used once), or None if unknown or expired."""
+        """The verifier for ``state`` (removing it, so a state can be used once), or None if unknown (never started, already used, or the app restarted)."""
         with self._lock:
             self._purge()
             entry = self._items.pop(state, None)
@@ -142,7 +146,7 @@ def finish_login(
         raise OAuthError("The sign-in response from Google was incomplete.")
     verifier = pending.pop(state)
     if verifier is None:
-        raise OAuthError("This sign-in link has expired or was already used. Please start the connection again.")
+        raise OAuthError("This sign-in was already used, or the app was restarted after you started it. Please start the connection again.")
     data = {
         "client_id": config.client_id, "code": code, "code_verifier": verifier,
         "grant_type": "authorization_code", "redirect_uri": config.redirect_uri,

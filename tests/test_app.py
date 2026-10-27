@@ -180,7 +180,8 @@ def _history_of(n=5):
 
 
 def test_server_without_google_settings_explains_how_to_set_it_up(monkeypatch):
-    monkeypatch.delenv("GOOGLE_CLIENT_ID", raising=False)
+    # An empty value counts as "set", so a real .env on this computer cannot fill it in again (the app only reads .env for unset names).
+    monkeypatch.setenv("GOOGLE_CLIENT_ID", "")
     app = AppTest.from_file(str(APP_PATH), default_timeout=180).run()
     assert not app.exception
     assert any("not set up on this server" in caption.value for caption in app.caption)

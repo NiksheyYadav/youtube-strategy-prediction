@@ -15,6 +15,7 @@ Uploading works everywhere with no setup. The steps below are only for the direc
 - It asks for one permission: **read-only access to your YouTube account's videos** (`youtube.readonly`). It cannot change, delete or upload anything.
 - It reads your latest videos once (about 9 of the 10,000 free API units a day for 200 videos), copies them into your browser session, and **immediately cancels its own access**. No password and no long-lived token is stored anywhere.
 - Your videos are kept in memory for your session only. They are not written to disk or to logs. Press **Remove my data** to forget them.
+- **There is no time limit on signing in.** Take as long as you like on Google's screen; the app does not give up after a few minutes. (The app's own access ends right after it reads your videos; that is a privacy choice, not a timer. Pressing **Connect with Google** again reads your latest videos again whenever you want.)
 - On the hosted website your data passes through that server's memory. If you prefer it never to leave your computer, run the app locally (`run.ps1` / `run.sh`).
 
 ## One-time setup (about 10 minutes, free)
