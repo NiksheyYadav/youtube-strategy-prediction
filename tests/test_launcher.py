@@ -127,3 +127,59 @@ def test_wrappers_exist_and_shell_script_is_executable_text():
     for name in ("run.ps1", "run.sh", "run.bat", "run_demo.ps1"):
         assert (ROOT / name).exists(), name
     assert (ROOT / "run.sh").read_text(encoding="utf-8").startswith("#!/usr/bin/env sh")
+
+
+# ------------------------------------------------------------------ real sockets and a real launched app (no simulated network)
+import socket  # noqa: E402
+import time  # noqa: E402
+import urllib.request  # noqa: E402
+
+
+def test_a_busy_port_is_skipped_instead_of_stopping_the_app():
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as busy:
+        busy.bind(("127.0.0.1", 0))
+        busy.listen(1)
+        port = busy.getsockname()[1]
+        assert launch.port_is_free(port) is False
+        chosen = launch.pick_port(port)
+        assert chosen != port and launch.port_is_free(chosen)
+
+
+def _lan_address() -> str | None:
+    try:
+        probe = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        probe.connect(("192.0.2.1", 9))  # no packet is sent; this only asks the OS which interface it would use
+        address = probe.getsockname()[0]
+        probe.close()
+    except OSError:
+        return None
+    return None if address.startswith("127.") else address
+
+
+@pytest.mark.skipif(not launch.venv_python().exists(), reason="needs the project's virtual environment (run the launcher once)")
+@pytest.mark.skipif(_lan_address() is None, reason="this computer has no network address other than localhost")
+def test_by_default_the_app_answers_this_computer_but_not_the_rest_of_the_network():
+    """Start the real launcher and probe it from outside: the app must not be reachable on the LAN address unless --lan is used."""
+    with socket.socket() as spare:
+        spare.bind(("127.0.0.1", 0))
+        port = spare.getsockname()[1]
+    process = subprocess.Popen([sys.executable, str(ROOT / "scripts" / "launch.py"), "--no-llm", "--no-browser", "--port", str(port)],
+                               cwd=ROOT, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    try:
+        for _ in range(60):
+            try:
+                with urllib.request.urlopen(f"http://127.0.0.1:{port}/_stcore/health", timeout=2) as response:
+                    assert response.status == 200
+                break
+            except OSError:
+                time.sleep(1)
+        else:
+            pytest.fail("the launched app never became healthy on localhost")
+        with pytest.raises(OSError):
+            urllib.request.urlopen(f"http://{_lan_address()}:{port}/_stcore/health", timeout=3)
+    finally:
+        process.terminate()
+        try:
+            process.wait(timeout=15)
+        except subprocess.TimeoutExpired:
+            process.kill()

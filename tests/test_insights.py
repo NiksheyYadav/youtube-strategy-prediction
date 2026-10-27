@@ -84,7 +84,7 @@ def test_time_grid_covers_all_168_slots_and_ranks_sensibly(bundle, draft):
 
 def test_edit_suggestions_are_real_edits_ranked_by_predicted_views(bundle, draft):
     suggestions = suggest_edits(bundle, draft)
-    assert len(suggestions) >= 6
+    assert len(suggestions) >= 4  # only honest edits are offered, so there are fewer than before
     assert all(item.draft != draft for item in suggestions)
     changes = [item.views_change_pct for item in suggestions]
     assert changes == sorted(changes, reverse=True)
@@ -98,7 +98,22 @@ def test_suggestions_skip_edits_that_are_already_applied(bundle):
         category_name="Education", day_of_week=1, publish_hour=9,
     )
     labels = {item.key for item in suggest_edits(bundle, done)}
-    assert not labels & {"number", "question", "exclaim", "urgency", "cta", "hashtags", "link"}
+    assert not labels & {"question", "exclaim", "cta", "hashtags"}
+
+
+def test_no_suggested_edit_invents_content_or_inserts_a_placeholder(bundle):
+    """Regression: edits used to add '- Part 1', 'Latest:' and a literal @yourchannel link that a user could apply to a real video."""
+    from src.golden import GOLDEN_DRAFTS
+
+    forbidden = ("yourchannel", "example.com", "Part 1", "Latest:", "lorem", "placeholder")
+    for name, draft in GOLDEN_DRAFTS.items():
+        for item in suggest_edits(bundle, draft):
+            text = " | ".join([item.draft.title, item.draft.description, item.draft.tags]).lower()
+            original = " | ".join([draft.title, draft.description, draft.tags]).lower()
+            # a forbidden phrase may only appear if the creator wrote it themselves
+            assert not any(word.lower() in text and word.lower() not in original for word in forbidden), (name, item.key)
+    assert {item.key for draft in GOLDEN_DRAFTS.values() for item in suggest_edits(bundle, draft)} <= {
+        "question", "exclaim", "shorten", "title_case", "sentence_case", "cta", "hashtags", "tag_keywords"}
 
 
 def test_category_what_if_includes_selected_category(bundle, draft):

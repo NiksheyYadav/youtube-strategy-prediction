@@ -13,7 +13,8 @@ RUN pip install --no-cache-dir -r requirements-app.txt
 COPY .streamlit ./.streamlit
 COPY app.py ./
 COPY src ./src
-COPY models/advanced_model_bundle.joblib models/similarity_index.joblib ./models/
+COPY models/advanced_model_bundle.joblib models/similarity_index.joblib models/history_models.joblib ./models/
+COPY knowledge ./knowledge
 
 RUN useradd --create-home appuser && chown -R appuser /app
 USER appuser

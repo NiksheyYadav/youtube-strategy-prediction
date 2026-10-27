@@ -17,7 +17,6 @@ code and trained model as the main forecast, so nothing can drift out of sync.
 from __future__ import annotations
 
 import math
-import re
 from dataclasses import dataclass, replace
 from functools import lru_cache
 from pathlib import Path
@@ -28,7 +27,6 @@ import pandas as pd
 
 from src.advanced_model import (
     CTA_WORDS,
-    URGENCY_WORDS,
     _tokens,
     build_demo_features,
     normalise_tags,
@@ -251,21 +249,14 @@ def _candidate_edits(draft: Draft) -> list[tuple[str, str, str, str, Draft]]:
         if edited != draft:
             candidates.append((key, label, why, field, edited))
 
-    if not any(character.isdigit() for character in title):
-        add("number", "Add a number to the title", "Adds a digit; titles with numbers are a classic listicle signal.",
-            "title", draft.with_changes(title=f"{title} - Part 1"))
+    # Only edits that keep the draft honest are offered. Edits that invent content (a made-up "Part 1", a fake "Latest:",
+    # a placeholder link, or "How to" glued onto a sentence) were removed: a score cannot make a fabrication a good idea.
     if "?" not in title:
         add("question", "Phrase the title as a question", "Adds a question mark, which invites curiosity.",
             "title", draft.with_changes(title=title.rstrip(".!") + "?"))
     if "!" not in title:
         add("exclaim", "End the title with an exclamation mark", "Adds one exclamation mark (an energy signal).",
             "title", draft.with_changes(title=title.rstrip("?.") + "!"))
-    if not lowered.startswith("how") and "how" not in tokens:
-        add("how_to", "Start with 'How to'", "Adds a how-to word; tutorial intent is easy for viewers to recognise.",
-            "title", draft.with_changes(title="How to " + title[:1].lower() + title[1:]))
-    if not tokens & URGENCY_WORDS:
-        add("urgency", "Add an urgency word ('Latest:')", "Adds a freshness/urgency word to the title.",
-            "title", draft.with_changes(title=f"Latest: {title}"))
     if len(title) > 60:
         cut = title[:60].rsplit(" ", 1)[0].rstrip(",:;-")
         add("shorten", "Shorten the title to about 60 characters", "Shorter titles are fully visible in search results.",
@@ -284,9 +275,6 @@ def _candidate_edits(draft: Draft) -> list[tuple[str, str, str, str, Draft]]:
         if words:
             add("hashtags", "Add hashtags to the description", "Adds hashtags built from the main title words.",
                 "description", draft.with_changes(description=f"{description}\n\n" + " ".join(f"#{word}" for word in words)))
-    if not re.search(r"https?://|www\.", description, re.IGNORECASE):
-        add("link", "Link to your channel or playlist in the description", "Adds an outbound link to the description.",
-            "description", draft.with_changes(description=f"{description}\n\nMore videos: https://www.youtube.com/@yourchannel".strip()))
     keywords = _keywords_for_tags(draft)
     if keywords:
         merged = normalise_tags(draft.tags)

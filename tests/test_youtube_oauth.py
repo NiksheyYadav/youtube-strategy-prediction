@@ -1,3 +1,5 @@
+import base64
+import hashlib
 from urllib.parse import parse_qs, urlparse
 
 import pytest
@@ -13,8 +15,20 @@ from src.youtube_oauth import (
     finish_login,
     oauth_config_from_env,
     revoke,
-    _challenge,
 )
+
+
+
+def s256(verifier: str) -> str:
+    """The PKCE challenge computed independently here, so these tests cannot pass by comparing the code with itself."""
+    return base64.urlsafe_b64encode(hashlib.sha256(verifier.encode("ascii")).digest()).rstrip(b"=").decode("ascii")
+
+
+def test_pkce_matches_the_official_test_vector_from_rfc_7636_appendix_b():
+    from src.youtube_oauth import _challenge
+
+    assert _challenge("dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk") == "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM"
+
 
 SECRET = "GOCSPX-" + "fake" + "-value-that-must-never-leak"  # built from pieces so the repo's secret scanner stays strict
 CONFIG = OAuthConfig("client-123.apps.googleusercontent.com", SECRET, "http://localhost:8501/")
@@ -57,7 +71,7 @@ def test_login_url_uses_pkce_state_read_only_scope_and_no_refresh_token():
     assert SECRET not in url and "client_secret" not in url
     verifier = pending.pop(query["state"])
     assert verifier and len(verifier) >= 43
-    assert query["code_challenge"] == _challenge(verifier), "the challenge must be the S256 hash of the stored verifier"
+    assert query["code_challenge"] == s256(verifier), "the challenge must be the S256 hash of the stored verifier"
 
 
 def test_every_login_gets_a_new_state():
@@ -77,7 +91,7 @@ def test_successful_exchange_sends_the_verifier_and_returns_a_token_that_hides_i
     token = finish_login(CONFIG, pending, {"code": "AUTHCODE", "state": query["state"]}, post=post, now=1000.0)
     assert sent["url"] == "https://oauth2.googleapis.com/token" and sent["timeout"] > 0
     assert sent["data"]["grant_type"] == "authorization_code" and sent["data"]["code"] == "AUTHCODE"
-    assert _challenge(sent["data"]["code_verifier"]) == query["code_challenge"]
+    assert s256(sent["data"]["code_verifier"]) == query["code_challenge"]
     assert token.access_token == "ya29.TOKEN" and token.expires_at == pytest.approx(1000.0 + 3540)
     assert not token.expired(now=1000.0) and token.expired(now=1000.0 + 3600)
     assert "ya29.TOKEN" not in repr(token) and "ya29.TOKEN" not in str(token)

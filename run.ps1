@@ -2,7 +2,10 @@
 param([switch]$Yes, [switch]$NoLlm, [switch]$Check, [switch]$NoBrowser, [int]$Port = 8501)
 $python = $null
 foreach ($candidate in @("python", "py")) {
-    if (Get-Command $candidate -ErrorAction SilentlyContinue) { $python = $candidate; break }
+    if (-not (Get-Command $candidate -ErrorAction SilentlyContinue)) { continue }
+    # the Microsoft Store "python" stub exists but is not Python: it answers with an install message and a non-zero code
+    $version = & $candidate --version 2>&1
+    if ($LASTEXITCODE -eq 0 -and "$version" -match "^Python 3") { $python = $candidate; break }
 }
 if (-not $python) {
     Write-Host "Python 3.10+ is required. Install it with:  winget install -e --id Python.Python.3.11" -ForegroundColor Yellow

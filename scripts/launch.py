@@ -6,6 +6,7 @@
     python scripts/launch.py --check    # print what would happen; change nothing
     python scripts/launch.py --no-llm   # skip the language model; rule-based advice only
     python scripts/launch.py --model qwen2.5:7b   # use a specific model from the catalog instead of the automatic choice
+    python scripts/launch.py --lan      # let other devices on your network open the app (default: this computer only)
 
 It (1) creates ./venv and installs the pinned requirements, (2) detects RAM / NVIDIA VRAM and picks a model that
 fits the device, (3) installs Ollama if needed, starts it and pulls the model plus a small lite fallback model
@@ -22,6 +23,7 @@ import json
 import os
 import platform
 import shutil
+import socket
 import subprocess
 import sys
 import threading
@@ -247,7 +249,29 @@ def setup_language_model(assume_yes: bool, override: str | None = None) -> None:
     say("Language models ready: " + ", ".join(installed_models() or ["none"]))
 
 
-def start_app(port: int, open_browser: bool, model: str | None = None) -> int:
+def port_is_free(port: int, host: str = "127.0.0.1") -> bool:
+    """True when the port can be taken: we try the very operation the app server will perform (binding it)."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+        try:
+            probe.bind((host, port))
+        except OSError:
+            return False
+        return True
+
+
+def pick_port(preferred: int, attempts: int = 20) -> int:
+    """The preferred port if it is free, otherwise the next free one (so a busy port never stops the app from starting)."""
+    for port in range(preferred, preferred + attempts):
+        if port_is_free(port):
+            return port
+    raise OSError(f"No free port found between {preferred} and {preferred + attempts - 1}. Close other apps or pass --port.")
+
+
+def start_app(port: int, open_browser: bool, model: str | None = None, lan: bool = False) -> int:
+    chosen = pick_port(port)
+    if chosen != port:
+        say(f"Port {port} is busy, so I am using {chosen} instead. (If you use the Google sign-in, GOOGLE_REDIRECT_URI in .env must use this port.)")
+    port = chosen
     url = f"http://localhost:{port}"
     if open_browser:
         def opener() -> None:
@@ -259,12 +283,15 @@ def start_app(port: int, open_browser: bool, model: str | None = None) -> int:
                 except Exception:  # noqa: BLE001
                     time.sleep(1)
         threading.Thread(target=opener, daemon=True).start()
+    if lan:
+        say("LAN mode: other devices on your network can open this app and use your local AI model. Use it only on a network you trust.")
     say(f"Starting Signal Studio at {url}  (press Ctrl+C to stop)")
     env = dict(os.environ, STREAMLIT_BROWSER_GATHER_USAGE_STATS="false")
     if model:
         env["LLM_MODEL"] = model  # the app then uses exactly this model instead of choosing one by device
+    address = "0.0.0.0" if lan else "127.0.0.1"  # by default only this computer can reach the app
     return subprocess.call([str(venv_python()), "-m", "streamlit", "run", str(ROOT / "app.py"), "--server.port", str(port),
-                            "--server.headless", "true"], cwd=ROOT, env=env)
+                            "--server.address", address, "--server.headless", "true"], cwd=ROOT, env=env)
 
 
 def check(override: str | None = None) -> None:
@@ -296,6 +323,7 @@ def main() -> int:
     parser.add_argument("--port", type=int, default=8501)
     parser.add_argument("--check", action="store_true", help="show the plan and change nothing")
     parser.add_argument("--model", help=f"use this model instead of the automatic choice (one of: {', '.join(catalog_names())})")
+    parser.add_argument("--lan", action="store_true", help="let other devices on your network open the app (default: this computer only)")
     args = parser.parse_args()
     if sys.version_info < MIN_PYTHON:
         print(f"Python {MIN_PYTHON[0]}.{MIN_PYTHON[1]}+ is required (found {platform.python_version()}).", file=sys.stderr)
@@ -313,7 +341,7 @@ def main() -> int:
             setup_language_model(args.yes, args.model)
         except Exception as error:  # noqa: BLE001 - the language model must never block the app
             say(f"Language-model setup failed ({type(error).__name__}); continuing in rule-based mode.")
-    return start_app(args.port, not args.no_browser, None if args.no_llm else args.model)
+    return start_app(args.port, not args.no_browser, None if args.no_llm else args.model, args.lan)
 
 
 if __name__ == "__main__":

@@ -36,8 +36,20 @@ def test_rules_path_keeps_the_forecast_and_rescores_titles_with_the_ml_model(bun
     assert result.source == "rules" and result.tier is None
     assert result.forecast.expected_views == pytest.approx(direct.expected_views, rel=1e-9)
     assert result.recommendation == rules_recommendation(result.packet)
-    title_row = next(row for row in result.rescored if row["kind"] == "title")
-    assert title_row["expected_views"] > 0
+    # every title the rules path proposes is re-scored by the ML model; some drafts get no title idea (no honest edit helps)
+    assert len(result.rescored) == len([r for r in result.rescored if r["expected_views"] > 0])
+
+
+def test_some_golden_drafts_get_title_ideas_and_each_one_is_rescored_by_the_ml_model(bundle):
+    seen = 0
+    for name, draft in GOLDEN_DRAFTS.items():
+        result = generate_recommendation(bundle, draft)
+        titles = result.recommendation["title_alternatives"]
+        rows = [row for row in result.rescored if row["kind"] == "title"]
+        assert len(rows) == len(titles), name
+        assert all(row["expected_views"] > 0 for row in rows)
+        seen += len(titles)
+    assert seen > 0, "at least one golden draft should receive a title idea"
 
 
 def test_no_runtime_or_not_ready_runtime_explains_how_to_enable_the_model(bundle):

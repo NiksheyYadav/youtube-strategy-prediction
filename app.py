@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
+import json
 import re
 import time
-from dataclasses import replace
 from pathlib import Path
 
 import altair as alt
@@ -43,37 +43,24 @@ st.set_page_config(
     page_title="Signal Studio | YouTube Strategy",
     page_icon="▶",
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="auto",  # open on wide screens, closed on phones (an open sidebar covers the whole page there)
 )
 
 TEAL, CORAL, SAND, INK = "#00BFA6", "#FF725E", "#F4EEE5", "#071116"
 
-EXAMPLES: dict[str, dict[str, object]] = {
-    "Education tutorial": {
-        "title": "5 Study Tips That Actually Work for Students",
-        "category": "Education", "day": 5, "hour": 18,
-        "tags": "study tips, productivity, student life, exam preparation",
-        "description": "A practical guide for students who want a repeatable study routine. Share your own routine in the comments.",
-    },
-    "Music video": {
-        "title": "Neon Nights (Official Music Video)",
-        "category": "Music", "day": 4, "hour": 17,
-        "tags": "new song, official video, music video, hindi song",
-        "description": "Official music video. Stream the song everywhere. Subscribe for new releases. https://example.com/stream",
-    },
-    "Tech review": {
-        "title": "5 Things I Wish I Knew Before Buying This Phone",
-        "category": "Science & Technology", "day": 2, "hour": 19,
-        "tags": "phone review, smartphone, tech review, buying guide",
-        "description": "An honest review after 30 days of use. Which features matter and which are marketing? Tell me what you use your phone for in the comments. #review #tech",
-    },
-    "Movie trailer": {
-        "title": "Official Trailer | Releasing This Friday",
-        "category": "Entertainment", "day": 0, "hour": 12,
-        "tags": "trailer, official trailer, movie, new movie",
-        "description": "Watch the official trailer. In cinemas this Friday. #trailer #movie",
-    },
-}
+REAL_EXAMPLES_PATH = Path(__file__).resolve().parent / "knowledge" / "real_examples.json"
+
+
+def load_real_examples() -> dict[str, dict[str, object]]:
+    """Real India-trending videos, taken unchanged from the dataset (chosen by scripts/pick_real_examples.py)."""
+    try:
+        videos = json.loads(REAL_EXAMPLES_PATH.read_text(encoding="utf-8"))["videos"]
+    except (OSError, ValueError, KeyError):
+        return {}
+    return {f"{video['category']}: {str(video['title'])[:46]}": video for video in videos}
+
+
+EXAMPLES: dict[str, dict[str, object]] = load_real_examples()
 
 
 # --------------------------------------------------------------------------- #
@@ -233,7 +220,8 @@ def draft_tips(feature_row: pd.DataFrame, summary: dict[str, dict[str, float]]) 
 # Session state: one source of truth for the current draft
 # --------------------------------------------------------------------------- #
 def init_state(categories: list[str]) -> None:
-    example = EXAMPLES["Education tutorial"]
+    example = next(iter(EXAMPLES.values()), {"title": "", "category": categories[0], "day": 0, "hour": 12, "tags": "", "description": ""})
+    st.session_state.setdefault("real_example", example if example.get("video_id") else None)
     defaults = {
         "main_title": example["title"],
         "main_category": example["category"] if example["category"] in categories else categories[0],
@@ -260,6 +248,7 @@ def read_form(prefix: str) -> dict[str, object]:
 
 def load_example(categories: list[str]) -> None:
     example = EXAMPLES[st.session_state["example_choice"]]
+    st.session_state["real_example"] = example
     st.session_state.update(
         main_title=example["title"],
         main_category=example["category"] if example["category"] in categories else categories[0],
@@ -330,6 +319,18 @@ def explanation_chart(table: pd.DataFrame) -> alt.Chart:
     )
 
 
+def render_real_outcome(draft: Draft) -> None:
+    """When the draft is one of the real example videos, show what really happened to it (it is in the training data: not a fair test)."""
+    example = st.session_state.get("real_example")
+    if not example or not example.get("video_id") or draft.title.strip() != str(example["title"]).strip():
+        return
+    st.info(
+        f"**This is a real video** ({esc(str(example['channel']))}). It actually got **{compact_number(example['actual_views'])}** views and "
+        f"**{as_percent(example['actual_engagement'])}** engagement. It is part of the training data, so this is not a fair test of the model. "
+        f"[Open it on YouTube](https://www.youtube.com/watch?v={example['video_id']})"
+    )
+
+
 def render_personal_panel(bundle: dict[str, object], draft: Draft) -> None:
     """Forecast for the creator's own channel (needs the earlier videos from the My channel tab)."""
     kicker("FOR YOUR CHANNEL · EXPERIMENTAL")
@@ -337,7 +338,7 @@ def render_personal_panel(bundle: dict[str, object], draft: Draft) -> None:
     if channel is None:
         st.markdown(
             "<div class='signal-note'>The numbers above compare your draft with a <b>typical trending video</b>. Add your own earlier "
-            "videos in the <b>My channel</b> tab (upload a YouTube Studio export, or try the sample) to see what the model expects "
+            "videos in the <b>My channel</b> tab (upload a YouTube Studio export, or connect your channel) to see what the model expects "
             "for <b>your</b> channel.</div>", unsafe_allow_html=True,
         )
         return
@@ -414,6 +415,7 @@ def render_forecast(bundle: dict[str, object], draft: Draft) -> None:
             unsafe_allow_html=True,
         )
 
+    render_real_outcome(draft)
     render_personal_panel(bundle, draft)
 
     if result.out_of_range_features:
@@ -645,9 +647,14 @@ def render_scenario(bundle: dict[str, object], categories: list[str], draft: Dra
         st.caption(f"{draft.category_name} · {DAYS[draft.day_of_week]} · {draft.publish_hour:02d}:00 IST")
     with right:
         st.markdown("#### Draft B · alternate proposal")
-        for key, value in {"compare_title": draft.title, "compare_category": draft.category_name,
-                           "compare_day": DAYS[draft.day_of_week], "compare_hour": draft.publish_hour,
-                           "compare_tags": draft.tags, "compare_description": draft.description}.items():
+        from_a = {"compare_title": draft.title, "compare_category": draft.category_name,
+                  "compare_day": DAYS[draft.day_of_week], "compare_hour": draft.publish_hour,
+                  "compare_tags": draft.tags, "compare_description": draft.description}
+        previous_a = st.session_state.get("compare_origin")
+        if previous_a is not None and previous_a != from_a and all(st.session_state.get(k) == v for k, v in previous_a.items()):
+            st.session_state.update(from_a)  # Draft B was never edited, so it follows Draft A instead of going stale
+        st.session_state["compare_origin"] = from_a
+        for key, value in from_a.items():
             st.session_state.setdefault(key, value)
         alternative = to_draft(proposal_inputs("compare", categories))
         st.button("Reset Draft B to Draft A", on_click=lambda: st.session_state.update(
@@ -879,19 +886,10 @@ def render_platform_timeline() -> None:
 # --------------------------------------------------------------------------- #
 # Tab: My channel
 # --------------------------------------------------------------------------- #
-SAMPLE_CHANNEL_PATH = Path(__file__).resolve().parent / "sample_data" / "sample_channel.csv"
-
-
 def clear_channel() -> None:
     """Callback: forget the creator's data (it only ever lived in this session)."""
     for key in ("channel", "channel_file_id"):
         st.session_state.pop(key, None)
-
-
-def load_sample_channel() -> None:
-    history = parse_upload(SAMPLE_CHANNEL_PATH.name, SAMPLE_CHANNEL_PATH.read_bytes())
-    st.session_state["channel"] = replace(history, source="sample")
-    st.session_state.pop("channel_file_id", None)
 
 
 def start_google_login() -> None:
@@ -952,7 +950,7 @@ def render_my_channel() -> None:
         "it also shows what the model expects for <b>your</b> channel: your usual level, plus how much this draft should add or lose.</p>",
         unsafe_allow_html=True,
     )
-    left, right = st.columns([1.7, 1])
+    left = st.container()
     with left:
         uploaded = st.file_uploader(
             "Upload a YouTube Studio export (the CSV, or the zipped export folder)", type=["csv", "zip"], key="channel_upload",
@@ -968,10 +966,6 @@ def render_my_channel() -> None:
                 st.error(str(error))
             if parsed:
                 st.rerun()  # the Forecast tab was already drawn in this run; redraw it with the new data
-    with right:
-        st.markdown("<div style='height:1.9rem'></div>", unsafe_allow_html=True)
-        st.button("Try the sample channel", on_click=load_sample_channel, width="stretch",
-                  help="A made-up channel with 26 videos, so you can see the feature without any account.")
 
     _render_google_connect()
 
@@ -988,8 +982,6 @@ def render_my_channel() -> None:
         _privacy_note()
         return
 
-    if channel.source == "sample":
-        st.warning("This is a made-up sample channel, not real data. It is only here to show how the feature works.")
     summary = summarise(channel)
     first, second, third, fourth = st.columns(4)
     first.metric("Videos loaded", f"{summary['videos']}")
@@ -1051,9 +1043,10 @@ def main() -> None:
 
     metrics = bundle["metrics"]
     with st.sidebar:
-        st.markdown("### Try an example")
-        st.selectbox("Load a sample draft", list(EXAMPLES), key="example_choice")
-        st.button("Load example", on_click=load_example, args=(categories,), width="stretch")
+        st.markdown("### Try a real video")
+        st.selectbox("Load a real trending video", list(EXAMPLES), key="example_choice",
+                     help="Real India-trending videos from the dataset, unchanged. They are part of the training data.")
+        st.button("Load this video", on_click=load_example, args=(categories,), width="stretch", disabled=not EXAMPLES)
         st.markdown("### About this demo")
         st.write(f"**{bundle['training_rows']:,}** unique India-trending videos")
         st.write(f"Views R² **{metrics['views_log']['five_fold_cv']['r2_mean']:.2f}** · engagement R² "
@@ -1063,7 +1056,7 @@ def main() -> None:
         if st.session_state.get("channel") is not None:
             st.markdown("### Your channel")
             channel_loaded = st.session_state["channel"]
-            st.write(f"**{len(channel_loaded.videos)}** videos loaded" + (" (sample)" if channel_loaded.source == "sample" else ""))
+            st.write(f"**{len(channel_loaded.videos)}** videos loaded")
             st.button("Remove my data", on_click=clear_channel, width="stretch", key="clear_channel_sidebar")
         st.caption("Flow for the demo: Forecast → My channel → Best time → Title lab → AI coach → Similar videos → Scenario lab → YouTube timeline.")
 

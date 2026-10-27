@@ -7,6 +7,8 @@ from pathlib import Path
 import pytest
 from streamlit.testing.v1 import AppTest
 
+from tests.real_data import real_channel, requires_data
+
 
 APP_PATH = Path(__file__).resolve().parents[1] / "app.py"
 
@@ -31,17 +33,19 @@ def test_app_boots_with_every_tab_and_no_exception(app):
     assert "Expected views for your channel" not in metrics  # nothing is personalised until the creator adds data
 
 
-def test_sample_channel_personalises_the_forecast_and_can_be_removed(app):
-    _button(app, "Try the sample channel").click()
+@requires_data
+def test_a_real_channels_history_personalises_the_forecast_and_can_be_removed(app):
+    history = real_channel()
+    app.session_state["channel"] = history  # exactly what an upload or the Google connection stores
     app.run()
     assert not app.exception
     metrics = {metric.label: metric.value for metric in app.metric}
     assert metrics["Expected views for your channel"] and metrics["Your usual video"]
     assert metrics["This draft vs your usual"].endswith("%")
-    assert metrics["Videos loaded"] == "26"
+    assert metrics["Videos loaded"] == str(len(history.videos))
     # the trending-video forecast is still there, unchanged and clearly separate
     assert metrics["Expected views"]
-    assert any("made-up sample channel" in warning.value for warning in app.warning)
+    assert not any("made-up" in warning.value for warning in app.warning), "nothing in the app may be made up"
 
     _button(app, "Remove my data").click()
     app.run()
@@ -61,12 +65,24 @@ def test_personal_forecast_explains_when_there_is_too_little_history(app):
     assert any("settled" in info.value for info in app.info)
 
 
-def test_every_example_draft_produces_a_forecast(app):
-    for name in ("Music video", "Tech review", "Movie trailer", "Education tutorial"):
+def test_every_real_example_video_produces_a_forecast_and_shows_what_really_happened(app):
+    options = list(app.selectbox(key="example_choice").options)
+    assert len(options) == 4, "the four real videos from knowledge/real_examples.json"
+    for name in options:
         app.selectbox(key="example_choice").select(name).run()
-        _button(app, "Load example").click().run()
+        _button(app, "Load this video").click().run()
         assert not app.exception, name
         assert any(metric.label == "Expected views" for metric in app.metric), name
+        banner = " ".join(info.value for info in app.info)
+        assert "This is a real video" in banner and "actually got" in banner and "not a fair test" in banner, name
+
+
+def test_the_real_video_note_disappears_once_the_user_changes_the_title(app):
+    assert any("This is a real video" in info.value for info in app.info)
+    app.text_area(key="main_title").set_value("Something I wrote myself")  # inside a form the value only counts when submitted
+    _button(app, "Generate pre-publication forecast").click().run()
+    assert not app.exception
+    assert not any("This is a real video" in info.value for info in app.info)
 
 
 def test_applying_a_suggestion_updates_the_form_and_reforecasts(app):
@@ -199,3 +215,25 @@ def test_youtube_timeline_tab_lists_sourced_entries_and_can_hide_press_reports(a
     app.run()
     assert not app.exception
     assert "press report (lower confidence)" not in " ".join(markdown.value for markdown in app.markdown)
+
+
+def test_draft_b_follows_draft_a_until_the_user_edits_it(app):
+    """Regression: after loading another video, Draft A changed but Draft B silently kept the old draft."""
+    first = app.session_state["main_title"]
+    assert app.session_state["compare_title"] == first
+    options = list(app.selectbox(key="example_choice").options)
+    app.selectbox(key="example_choice").select(options[1]).run()
+    _button(app, "Load this video").click().run()
+    assert not app.exception
+    assert app.session_state["main_title"] != first
+    assert app.session_state["compare_title"] == app.session_state["main_title"], "an untouched Draft B must follow Draft A"
+
+    app.text_area(key="compare_title").set_value("My own variant of the title").run()
+    app.selectbox(key="example_choice").select(options[2]).run()
+    _button(app, "Load this video").click().run()
+    assert app.session_state["compare_title"] == "My own variant of the title", "a Draft B the user edited must be left alone"
+
+
+def test_the_sidebar_is_configured_to_start_closed_on_small_screens():
+    source = APP_PATH.read_text(encoding="utf-8")
+    assert 'initial_sidebar_state="auto"' in source and 'initial_sidebar_state="expanded"' not in source

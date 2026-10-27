@@ -42,9 +42,9 @@ def _tags(raw: str) -> list[str]:
 _OWN_PATTERN_ACTIONS = {
     # label -> (action when the pattern is positive, action when it is negative, does the draft already have the feature?)
     "a number in the title": ("Consider adding a number to the title", "Reconsider the number in the title",
-                              lambda d: any(ch.isdigit() for ch in d.title), "number"),
+                              lambda d: any(ch.isdigit() for ch in d.title), None),
     "a title that starts with 'how'": ("Consider starting the title with 'How'", "Reconsider starting the title with 'How'",
-                                       lambda d: d.title.strip().lower().startswith("how"), "how_to"),
+                                       lambda d: d.title.strip().lower().startswith("how"), None),
     "a question in the title": ("Consider phrasing the title as a question", "Reconsider phrasing the title as a question",
                                 lambda d: "?" in d.title, "question"),
     "a weekend publish day": ("Consider publishing at the weekend", "Reconsider the weekend publish day", lambda d: d.day_of_week >= 5, None),

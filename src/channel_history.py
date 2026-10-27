@@ -23,6 +23,8 @@ MAX_ZIP_RATIO = 200          # a CSV that expands more than this is treated as a
 MAX_ROWS_READ = 20_000
 MAX_VIDEOS_KEPT = 2_000      # the newest videos are kept
 TITLE_LIMIT = 120
+YOUTUBE_FOUNDED = pd.Timestamp("2005-04-01", tz="UTC")  # the first video was uploaded in April 2005
+MAX_PLAUSIBLE_VIEWS = 50_000_000_000
 SETTLE_DAYS = 14             # views of a video younger than this are still growing, so they do not count as history
 
 CANONICAL = ["video_id", "title", "publish_time", "views", "likes", "comments", "tags", "description", "category_name", "duration_s"]
@@ -130,7 +132,9 @@ def clean_videos(frame: pd.DataFrame, *, source: str) -> ChannelHistory:
     notes: list[str] = []
     missing = [name for name in ("title", "publish_time", "views") if name not in frame.columns]
     if missing:
-        raise HistoryError("Missing columns: " + ", ".join(missing) + ". The file needs a video title, a publish date and a view count.")
+        names = {"title": "a video title", "publish_time": "a publish date", "views": "a view count"}
+        raise HistoryError("The file has no column for " + " or ".join(names[m] for m in missing) + ". Each video needs a title, a publish date "
+                           "and a view count (the YouTube Studio file called 'Table data.csv' has all three).")
     out = pd.DataFrame({name: frame[name] if name in frame.columns else np.nan for name in CANONICAL})
     out = out[out["video_id"].astype(str).str.strip().str.lower() != "total"]
     out["title"] = out["title"].map(sanitise_text)
@@ -145,6 +149,14 @@ def clean_videos(frame: pd.DataFrame, *, source: str) -> ChannelHistory:
     out = out[(out["title"] != "") & out["views"].notna() & (out["views"] >= 0) & out["publish_time"].notna()]
     if before - len(out):
         notes.append(f"{before - len(out)} row(s) without a title, a valid date or a view count were skipped.")
+    # impossible history is dropped, not trusted: a video cannot be published before YouTube existed or in the future,
+    # and no video has ever had tens of billions of views (a typo or a unit mix-up would otherwise distort the whole forecast)
+    latest_possible = pd.Timestamp.now(tz="UTC") + pd.Timedelta(days=1)
+    possible = (out["publish_time"] >= YOUTUBE_FOUNDED) & (out["publish_time"] <= latest_possible) & (out["views"] <= MAX_PLAUSIBLE_VIEWS)
+    if (~possible).any():
+        notes.append(f"{int((~possible).sum())} video(s) with a publish date before YouTube existed, a date in the future or an impossible "
+                     "number of views were skipped.")
+        out = out[possible]
     key = out["video_id"].astype(str).where(out["video_id"].astype(str).str.len() > 3, out["title"] + out["publish_time"].astype(str))
     deduplicated = out.loc[~key.duplicated(keep="last")]
     if len(deduplicated) < len(out):

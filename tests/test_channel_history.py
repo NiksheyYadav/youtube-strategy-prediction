@@ -81,7 +81,7 @@ def test_semicolon_and_tab_separated_files_are_read():
 
 
 def test_missing_required_columns_give_a_clear_error():
-    with pytest.raises(HistoryError, match="Missing columns: views"):
+    with pytest.raises(HistoryError, match="no column for a view count"):
         parse_upload("x.csv", b"Video title,Video publish time\nA,2024-01-02\n")
     with pytest.raises(HistoryError):
         parse_upload("x.csv", b"not a table at all")
@@ -156,3 +156,20 @@ def test_summary_reports_the_creators_typical_level():
     assert summary["median_views"] == 1000
     assert summary["typical_views"] == pytest.approx(np.expm1(np.log1p([100, 1000, 10000]).mean()))
     assert summary["top_titles"][0][0] == "c"
+
+
+def test_impossible_history_is_skipped_with_a_note_and_never_reaches_the_model():
+    future = f"{pd.Timestamp.now().year + 5}-01-02"
+    rows = ["Video title,Video publish time,Views", "Real video,2024-03-02,1200", f"From the future,{future},500",
+            "Before YouTube,1900-01-01,500", "Typo in views,2024-04-02,1e30", "Absurd views,2024-05-02,99999999999999999999"]
+    csv = "\n".join(rows).encode()
+    history = parse_upload("x.csv", csv)
+    assert list(history.videos["title"]) == ["Real video"]
+    assert any("4 video(s)" in note and "impossible" in note for note in history.notes)
+
+
+def test_error_messages_use_plain_words_not_internal_column_names():
+    with pytest.raises(HistoryError) as caught:
+        parse_upload("x.csv", b"a,b,c\n1,2,3\n")
+    message = str(caught.value)
+    assert "publish_time" not in message and "a video title" in message and "Table data.csv" in message
