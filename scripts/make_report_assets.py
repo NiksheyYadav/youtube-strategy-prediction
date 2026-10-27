@@ -1,6 +1,7 @@
 """Generate the diagrams and charts used by the report, notes and presentation (real data where possible).
 
-    python scripts/make_report_assets.py
+    python scripts/make_report_assets.py            # coloured set used by the notes and the deck
+    python scripts/make_report_assets.py --plain    # black text, Times New Roman, light boxes (printed report)
 """
 
 from __future__ import annotations
@@ -19,21 +20,40 @@ from matplotlib.patches import FancyArrowPatch, FancyBboxPatch
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-OUT = ROOT / "deliverables" / "assets" / "diagrams"
+PLAIN = "--plain" in sys.argv
+OUT = ROOT / "deliverables" / "assets" / ("diagrams_report" if PLAIN else "diagrams")
 OUT.mkdir(parents=True, exist_ok=True)
 
 GREEN, DARK, GOLD, GRAY, LIGHT, BLUE, CORAL, WHITE = "#0E9F6E", "#1F2937", "#D4A72C", "#6B7280", "#F2F5FA", "#3B82F6", "#E4572E", "#FFFFFF"
-plt.rcParams.update({"font.family": "DejaVu Sans", "axes.spines.top": False, "axes.spines.right": False, "figure.dpi": 100})
+plt.rcParams.update({"font.family": "Times New Roman" if PLAIN else "DejaVu Sans", "axes.spines.top": False, "axes.spines.right": False, "figure.dpi": 100})
+if PLAIN:
+    plt.rcParams.update({"text.color": "black", "axes.labelcolor": "black", "xtick.color": "black", "ytick.color": "black", "axes.edgecolor": "black",
+                         "mathtext.fontset": "stix"})
+
+
+def tint(hex_colour, amount=0.82):
+    """Blend a colour with white so black text stays readable on top of it."""
+    r, g, b = (int(hex_colour[i:i + 2], 16) for i in (1, 3, 5))
+    return "#%02X%02X%02X" % tuple(round(c + (255 - c) * amount) for c in (r, g, b))
 
 
 def save(fig, name):
+    if PLAIN:  # every piece of text black, whatever colour the drawing code asked for
+        for text in fig.findobj(matplotlib.text.Text):
+            text.set_color("black")
+            text.set_alpha(1)
     fig.savefig(OUT / f"{name}.png", dpi=200, bbox_inches="tight", facecolor="white")
     plt.close(fig)
     print("saved", name)
 
 
 def box(ax, x, y, w, h, text, color=GREEN, fg=WHITE, size=11, sub=None, bold=True):
-    ax.add_patch(FancyBboxPatch((x, y), w, h, boxstyle="round,pad=0.02,rounding_size=0.12", fc=color, ec="none"))
+    if PLAIN:
+        fg = "black"
+        fill = tint(color) if color != LIGHT else WHITE
+        ax.add_patch(FancyBboxPatch((x, y), w, h, boxstyle="round,pad=0.02,rounding_size=0.12", fc=fill, ec="black", lw=1.1))
+    else:
+        ax.add_patch(FancyBboxPatch((x, y), w, h, boxstyle="round,pad=0.02,rounding_size=0.12", fc=color, ec="none"))
     if sub:
         ax.text(x + w / 2, y + h * 0.64, text, ha="center", va="center", color=fg, fontsize=size, fontweight="bold" if bold else "normal")
         ax.text(x + w / 2, y + h * 0.27, sub, ha="center", va="center", color=fg, fontsize=size - 3, alpha=0.92)
@@ -142,7 +162,7 @@ def architecture():
     for x in (2.57, 5.12, 7.67, 10.22):
         arrow(ax, x, 4.15, x + 0.18, 4.15)
     ax.text(6.5, 5.95, "Signal Studio: how the pieces fit together", ha="center", fontsize=15, fontweight="bold", color=DARK)
-    side = [("131 automated tests", "golden numbers never change", GREEN, 0.7), ("GitHub Actions", "tests on every push", BLUE, 3.9), ("Render (online)", "rule-based mode + keep-warm", DARK, 7.1), ("Ollama (your laptop)", "real local AI models", GOLD, 10.1)]
+    side = [(f"{sum(test_counts().values())} automated tests", "golden numbers never change", GREEN, 0.7), ("GitHub Actions", "tests on every push", BLUE, 3.9), ("Render (online)", "rule-based mode + keep-warm", DARK, 7.1), ("Ollama (your laptop)", "real local AI models", GOLD, 10.1)]
     for t, s, c, x in side:
         box(ax, x, 0.7, 2.6, 1.3, t, c, size=10.5, sub=s)
         arrow(ax, x + 1.3, 2.05, x + 1.3, 3.2, color=GRAY, style="-")
@@ -216,7 +236,7 @@ def conformal_idea(cov):
     ax.set_title("An 80% range, not a single number", fontsize=11, color=DARK)
     ax.spines["left"].set_visible(False)
     ax = axes[1]
-    names = ["Target", "Out-of-fold", "Later uploads\n(views)", "Later uploads\n(engagement)"]
+    names = ["Target", "Mixed-data\ntest", "Later uploads\n(views)", "Later uploads\n(engagement)"]
     vals = [80.0, cov["views_out_of_fold"] * 100, cov["views_chronological_holdout"] * 100, cov["engagement_chronological_holdout"] * 100]
     ax.bar(names, vals, color=[GRAY, GREEN, GREEN, GOLD], width=0.6)
     for i, v in enumerate(vals):
@@ -289,12 +309,22 @@ def data_charts():
     conformal_idea(cov)
 
 
+_TEST_COUNTS: dict[str, int] = {}
+
+
+def test_counts() -> dict[str, int]:
+    """Number of collected tests per test file (collected once, then reused)."""
+    if not _TEST_COUNTS:
+        result = subprocess.run([sys.executable, "-m", "pytest", "--collect-only", "-q"], cwd=ROOT, capture_output=True, text=True)
+        for line in result.stdout.splitlines():
+            if "::" in line:
+                key = line.split("::")[0].replace("tests/", "").replace(".py", "")
+                _TEST_COUNTS[key] = _TEST_COUNTS.get(key, 0) + 1
+    return _TEST_COUNTS
+
+
 def tests_chart():
-    result = subprocess.run([sys.executable, "-m", "pytest", "--collect-only", "-q"], cwd=ROOT, capture_output=True, text=True)
-    counts: dict[str, int] = {}
-    for line in result.stdout.splitlines():
-        if "::" in line:
-            counts[line.split("::")[0].replace("tests/", "").replace(".py", "")] = counts.get(line.split("::")[0].replace("tests/", "").replace(".py", ""), 0) + 1
+    counts = test_counts()
     names = {"test_golden_predictions": "Numbers never change", "test_real_model": "Real AI model", "test_app": "Whole app", "test_insights": "Explain tools",
              "test_reco_schema": "Answer checkers", "test_reco_evidence": "Evidence", "test_device_and_llm_client": "Device + AI client", "test_launcher": "Launcher",
              "test_advanced_model": "Features", "test_inference": "Predictions", "test_model_contract": "Feature contract", "test_no_secrets": "No passwords", "test_workflows": "Keep-warm", "test_recommendations": "Recommendations"}

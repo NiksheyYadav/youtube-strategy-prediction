@@ -11,7 +11,8 @@
 ## Rebuild everything
 
 ```powershell
-python scripts/make_report_assets.py          # diagrams and charts from real project data
+python scripts/make_report_assets.py          # coloured diagrams and charts (notes and deck), from real project data
+python scripts/make_report_assets.py --plain  # black-text Times New Roman versions of the same figures (the printed report)
 python scripts/launch.py --no-browser --port 8502   # app for screenshots
 python scripts/capture_screens.py http://localhost:8502   # real screenshots (AI coach uses the real model)
 python scripts/eval_ai_coach.py               # real-model evaluation table

@@ -3,7 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const {
   Document, Packer, Paragraph, TextRun, ImageRun, Table, TableRow, TableCell, WidthType, ShadingType, AlignmentType,
-  HeadingLevel, BorderStyle, PageBreak, Footer, PageNumber, LevelFormat, VerticalAlign,
+  HeadingLevel, BorderStyle, PageBreak, Footer, PageNumber, LevelFormat, VerticalAlign, TabStopType,
 } = require('docx');
 
 const ASSETS = path.join(__dirname, 'assets');
@@ -15,18 +15,22 @@ function pngInfo(file) {
   return { buffer, width: buffer.readUInt32BE(16), height: buffer.readUInt32BE(20) };
 }
 
-function kit({ font, size, accent, dark }) {
+function kit({ font, size, accent, dark, plain = false }) {
+  // plain = true: every text colour is black, body text is justified, table headers are light grey (for the printed report)
+  const BLACK = '000000';
+  const ink = plain ? { color: BLACK } : {};
+  const bodyAlign = plain ? AlignmentType.JUSTIFIED : undefined;
   // inline markup: **bold**, __italic__
   const runs = (text, base = {}) =>
     String(text).split(/(\*\*[^*]+\*\*|__[^_]+__)/g).filter(Boolean).map((part) => {
-      if (part.startsWith('**')) return new TextRun({ text: part.slice(2, -2), bold: true, font, size, ...base });
-      if (part.startsWith('__')) return new TextRun({ text: part.slice(2, -2), italics: true, font, size, ...base });
-      return new TextRun({ text: part, font, size, ...base });
+      if (part.startsWith('**')) return new TextRun({ text: part.slice(2, -2), bold: true, font, size, ...base, ...ink });
+      if (part.startsWith('__')) return new TextRun({ text: part.slice(2, -2), italics: true, font, size, ...base, ...ink });
+      return new TextRun({ text: part, font, size, ...base, ...ink });
     });
 
   const p = (text, o = {}) =>
     new Paragraph({
-      alignment: o.align || AlignmentType.LEFT,
+      alignment: o.align || bodyAlign || AlignmentType.LEFT,
       spacing: { before: o.before ?? 0, after: o.after ?? 120, line: o.line ?? 300 },
       keepNext: o.keepNext, indent: o.indent,
       children: runs(text, o.run || {}),
@@ -37,17 +41,17 @@ function kit({ font, size, accent, dark }) {
     return new Paragraph({
       heading: [null, HeadingLevel.HEADING_1, HeadingLevel.HEADING_2, HeadingLevel.HEADING_3][level],
       keepNext: true, spacing: { before: level === 1 ? 360 : 240, after: 120 },
-      children: [new TextRun({ text, bold: true, font, size: sizes[level], color: level === 3 ? dark : accent })],
+      children: [new TextRun({ text, bold: true, font, size: sizes[level], color: plain ? BLACK : (level === 3 ? dark : accent) })],
     });
   };
 
   let listCounter = 0;
   const bullets = (items, ref = 'bullets') =>
-    items.map((t) => new Paragraph({ numbering: { reference: ref, level: 0 }, spacing: { after: 70, line: 290 }, children: runs(t) }));
+    items.map((t) => new Paragraph({ numbering: { reference: ref, level: 0 }, alignment: bodyAlign, spacing: { after: 70, line: 290 }, children: runs(t) }));
   // each numbered list gets its own instance so numbering restarts at 1
   const numbered = (items) => {
     const instance = ++listCounter;
-    return items.map((t) => new Paragraph({ numbering: { reference: 'numbers', level: 0, instance }, spacing: { after: 70, line: 290 }, children: runs(t) }));
+    return items.map((t) => new Paragraph({ numbering: { reference: 'numbers', level: 0, instance }, alignment: bodyAlign, spacing: { after: 70, line: 290 }, children: runs(t) }));
   };
 
   const figure = (file, widthIn, caption) => {
@@ -60,14 +64,14 @@ function kit({ font, size, accent, dark }) {
         altText: { title: caption || file, description: caption || file, name: file } })],
     })];
     if (caption) out.push(new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 200 },
-      children: [new TextRun({ text: caption, italics: true, font, size: size - 3, color: '555555' })] }));
+      children: [new TextRun({ text: caption, italics: true, font, size: size - 3, color: plain ? BLACK : '555555' })] }));
     return out;
   };
 
   const border = (color, sz = 4) => ({ style: BorderStyle.SINGLE, size: sz, color });
   const noBorder = { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' };
 
-  const callout = (title, text, color = accent, fill = 'F2F8F5') =>
+  const callout = (title, text, color = plain ? BLACK : accent, fill = plain ? 'F2F2F2' : 'F2F8F5') =>
     new Table({
       width: { size: CONTENT_DXA, type: WidthType.DXA }, columnWidths: [CONTENT_DXA],
       rows: [new TableRow({ children: [new TableCell({
@@ -76,8 +80,8 @@ function kit({ font, size, accent, dark }) {
         margins: { top: 100, bottom: 100, left: 180, right: 160 },
         borders: { top: noBorder, bottom: noBorder, right: noBorder, left: border(color, 24) },
         children: [
-          new Paragraph({ spacing: { after: 40 }, children: [new TextRun({ text: title, bold: true, font, size: size - 1, color })] }),
-          ...(Array.isArray(text) ? text : [text]).map((t) => new Paragraph({ spacing: { after: 40, line: 280 }, children: runs(t, { size: size - 1 }) })),
+          new Paragraph({ spacing: { after: 40 }, children: [new TextRun({ text: title, bold: true, font, size: size - 1, color: plain ? BLACK : color })] }),
+          ...(Array.isArray(text) ? text : [text]).map((t) => new Paragraph({ alignment: bodyAlign, spacing: { after: 40, line: 280 }, children: runs(t, { size: size - 1 }) })),
         ],
       })] })],
     });
@@ -87,10 +91,10 @@ function kit({ font, size, accent, dark }) {
     const cols = widths.map((w) => Math.round((w / total) * CONTENT_DXA));
     const cell = (text, i, head) => new TableCell({
       width: { size: cols[i], type: WidthType.DXA }, verticalAlign: VerticalAlign.CENTER,
-      shading: head ? { fill: accent, type: ShadingType.CLEAR, color: 'auto' } : undefined,
+      shading: head ? { fill: plain ? 'D9D9D9' : accent, type: ShadingType.CLEAR, color: 'auto' } : undefined,
       margins: { top: 70, bottom: 70, left: 100, right: 100 },
-      borders: { top: border('C9D1D9'), bottom: border('C9D1D9'), left: border('C9D1D9'), right: border('C9D1D9') },
-      children: [new Paragraph({ spacing: { after: 0 }, children: runs(text, head ? { bold: true, color: 'FFFFFF', size: size - 1 } : { size: size - 1 }) })],
+      borders: { top: border(plain ? '000000' : 'C9D1D9'), bottom: border(plain ? '000000' : 'C9D1D9'), left: border(plain ? '000000' : 'C9D1D9'), right: border(plain ? '000000' : 'C9D1D9') },
+      children: [new Paragraph({ spacing: { after: 0 }, children: runs(text, head ? { bold: true, color: plain ? BLACK : 'FFFFFF', size: size - 1 } : { size: size - 1 }) })],
     });
     return new Table({
       width: { size: CONTENT_DXA, type: WidthType.DXA }, columnWidths: cols,
@@ -110,24 +114,35 @@ function kit({ font, size, accent, dark }) {
   return { runs, p, heading, bullets, numbered, figure, callout, table, gap, pageBreak, banner, border };
 }
 
-function numberingConfig(font, size) {
+function numberingConfig(font, size, plain = false) {
   const level = (format, text) => ({ level: 0, format, text, alignment: AlignmentType.LEFT,
-    style: { paragraph: { indent: { left: 540, hanging: 300 } }, run: { font, size } } });
+    style: { paragraph: { indent: { left: 540, hanging: 300 } }, run: { font, size, ...(plain ? { color: '000000' } : {}) } } });
   return { config: [
     { reference: 'bullets', levels: [level(LevelFormat.BULLET, '•')] },
     { reference: 'numbers', levels: [level(LevelFormat.DECIMAL, '%1.')] },
   ] };
 }
 
-function buildDocument({ font, size, accent, children, footerText }) {
+function buildDocument({ font, size, accent, children, footerText, title, plain = false, footer }) {
+  const BLACK = '000000';
+  const colour = plain ? { color: BLACK } : {};
+  const headingStyle = (n) => ({ run: { font, bold: true, size: size + (n === 1 ? 10 : n === 2 ? 5 : 2), ...colour } });
+  // footer = { left, right }: text at the left edge and at the right edge of the same line
+  const footerParagraph = footer
+    ? new Paragraph({
+      tabStops: [{ type: TabStopType.RIGHT, position: CONTENT_DXA }],
+      border: { top: { style: BorderStyle.SINGLE, size: 4, color: BLACK, space: 6 } },
+      children: [new TextRun({ text: `${footer.left}	${footer.right}`, font, size: 22, color: BLACK })],
+    })
+    : new Paragraph({ alignment: AlignmentType.CENTER,
+      children: [new TextRun({ text: `${footerText}   |   Page `, font, size: 18, color: '777777' }), new TextRun({ children: [PageNumber.CURRENT], font, size: 18, color: '777777' })] });
   return new Document({
-    creator: 'Signal Studio team', title: footerText,
-    styles: { default: { document: { run: { font, size } } } },
-    numbering: numberingConfig(font, size),
+    creator: 'Signal Studio team', title: title || footerText,
+    styles: { default: { document: { run: { font, size, ...colour } }, heading1: headingStyle(1), heading2: headingStyle(2), heading3: headingStyle(3) } },
+    numbering: numberingConfig(font, size, plain),
     sections: [{
       properties: { page: { size: { width: PAGE.width, height: PAGE.height }, margin: { top: PAGE.margin, bottom: PAGE.margin, left: PAGE.margin, right: PAGE.margin } } },
-      footers: { default: new Footer({ children: [new Paragraph({ alignment: AlignmentType.CENTER,
-        children: [new TextRun({ text: `${footerText}   |   Page `, font, size: 18, color: '777777' }), new TextRun({ children: [PageNumber.CURRENT], font, size: 18, color: '777777' })] })] }) },
+      footers: { default: new Footer({ children: [footerParagraph] }) },
       children,
     }],
   });
