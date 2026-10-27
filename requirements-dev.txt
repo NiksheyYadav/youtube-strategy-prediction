@@ -1,0 +1,7 @@
+# Everything needed to retrain the models, run every test (including the real-browser tests) and check quality.
+#   pip install -r requirements-dev.txt
+# The browser tests drive your installed Google Chrome (or Microsoft Edge); no separate browser download is needed.
+-r requirements.txt
+playwright==1.64.1
+coverage==7.16.2
+pip-audit>=2.7

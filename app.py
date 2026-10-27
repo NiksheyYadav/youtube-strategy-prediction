@@ -920,9 +920,14 @@ def render_platform_timeline() -> None:
 # Tab: My channel
 # --------------------------------------------------------------------------- #
 def clear_channel() -> None:
-    """Callback: forget the creator's data (it only ever lived in this session)."""
+    """Callback: forget the creator's data (it only ever lived in this session).
+
+    The upload box is replaced by a fresh one too.  Otherwise it still holds the file, and the next rerun would read that file
+    again and bring the data back (found by the browser tests: "Remove my data" did not really remove an uploaded file).
+    """
     for key in ("channel", "channel_file_id"):
         st.session_state.pop(key, None)
+    st.session_state["upload_generation"] = st.session_state.get("upload_generation", 0) + 1
 
 
 def start_google_login() -> None:
@@ -986,7 +991,7 @@ def render_my_channel() -> None:
     left = st.container()
     with left:
         uploaded = st.file_uploader(
-            "Upload a YouTube Studio export (the CSV, or the zipped export folder)", type=["csv", "zip"], key="channel_upload",
+            "Upload a YouTube Studio export (the CSV, or the zipped export folder)", type=["csv", "zip"], key=f"channel_upload_{st.session_state.get('upload_generation', 0)}",
             help="Needs a video title, a publish date and a view count for each video. Maximum 5 MB.",
         )
         if uploaded is not None and st.session_state.get("channel_file_id") != uploaded.file_id:

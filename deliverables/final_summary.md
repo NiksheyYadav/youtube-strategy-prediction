@@ -29,7 +29,7 @@ The model only uses fields a creator knows before upload: category, title text, 
 
 ## Results
 
-The original Linear Regression baseline achieved R² of 0.197 for log views and 0.384 for engagement. The first Random Forest achieved held-out R² of 0.378 and 0.612. With the TA4 feature set, Random Forest achieved five-fold CV R² of **0.419** (log views) and **0.637** (engagement). A later-in-time holdout was harder, at **0.368** and **0.529**, which is an important result because platform patterns change. The 80 % prediction intervals cover 80.0 % of out-of-fold cases and 79.7 % / 80.9 % (views / engagement) of later uploads; a views forecast is typically within x0.29 to x3.5 of the truth.
+The original Linear Regression baseline achieved R² of 0.197 for log views and 0.384 for engagement. The first Random Forest achieved held-out R² of 0.378 and 0.612. With the TA4 feature set, Random Forest reached a shuffled five-fold CV R² of 0.43 (log views) and 0.64 (engagement), but that test puts the same channel on both sides of the split and flatters the model. On **channels the model had never seen**, which is what a new creator gets, R² is **0.19** (views) and **0.38** (engagement); on later uploads it is 0.38 and 0.55. With a creator's own earlier videos the history model reaches 0.57 and 0.72 on unseen channels. The 80 % prediction intervals are calibrated on unseen channels (80.0 % out-of-fold) and held 86 % / 88 % (views / engagement) on later uploads; a views forecast is typically within x0.22 to x4.6 of the truth. Videos with ratings or comments switched off (4.8 %) are left out of the engagement target, and titles in Hindi, Tamil, Telugu and other scripts are read as words but score close to zero R² for views, which the app states.
 
 ## Responsible interpretation
 
@@ -38,7 +38,7 @@ Feature importances identify signals used by the model; they do not prove cause 
 ## Run locally
 
 ```powershell
-.\run_demo.ps1
+.\run.ps1
 ```
 
 Then open `http://localhost:8501`, or use the deployed Render service (see the repository README).

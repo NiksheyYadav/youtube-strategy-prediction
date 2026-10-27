@@ -15,7 +15,7 @@ Uploading works everywhere with no setup. The steps below are only for the direc
 - It asks for one permission: **read-only access to your YouTube account's videos** (`youtube.readonly`). It cannot change, delete or upload anything.
 - It reads your latest videos once (about 9 of the 10,000 free API units a day for 200 videos), copies them into your browser session, and **immediately cancels its own access**. No password and no long-lived token is stored anywhere.
 - Your videos are kept in memory for your session only. They are not written to disk or to logs. Press **Remove my data** to forget them.
-- On the hosted demo your data passes through that server's memory. If you prefer it never to leave your computer, run the app locally (`run.ps1` / `run.sh`).
+- On the hosted website your data passes through that server's memory. If you prefer it never to leave your computer, run the app locally (`run.ps1` / `run.sh`).
 
 ## One-time setup (about 10 minutes, free)
 
@@ -28,7 +28,7 @@ You do this in your own Google account. **Never paste the client secret into a c
 4. **APIs & Services -> Credentials -> Create credentials -> OAuth client ID**: type **Web application**.
    Under **Authorised redirect URIs** add the exact address of the app:
    - local run: `http://localhost:8501/` (use the port you start the app on)
-   - hosted demo: `https://youtube-strategy-predictor.onrender.com/`
+   - hosted website: `https://youtube-strategy-predictor.onrender.com/`
 5. Copy the **Client ID** and **Client secret**.
 6. Copy `.env.example` to `.env` (this file is git-ignored) and fill in:
 
@@ -38,7 +38,7 @@ You do this in your own Google account. **Never paste the client secret into a c
    GOOGLE_REDIRECT_URI=http://localhost:8501/
    ```
 
-   For the hosted demo, set the same three values as environment variables in the Render dashboard instead (never in git).
+   For the hosted website, set the same three values as environment variables in the Render dashboard instead (never in git).
 7. Start the app (`run.ps1` / `run.sh`), open the **My channel** tab, press **Connect with Google**, then **Continue to Google**.
 
 ## What you will see

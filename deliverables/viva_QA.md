@@ -40,7 +40,7 @@ It adds explainable fields that are still available before upload: title punctua
 
 ### What do the accuracy results mean?
 
-The advanced model achieved mean five-fold CV R² of 0.419 for log views and 0.637 for engagement rate. On a harder chronological holdout, R² was 0.368 and 0.529. The gap is expected: predicting later uploads is harder because YouTube patterns change over time. These scores show useful signal but are not guarantees for individual videos.
+The advanced model scored a shuffled five-fold CV R² of 0.43 for log views and 0.64 for engagement rate, but that test lets the same channel appear on both sides, so it is optimistic. The honest test uses channels the model never saw: R² 0.19 (views) and 0.38 (engagement). On later uploads it was 0.38 and 0.55. The gaps are expected: new channels and later uploads are harder because audiences and YouTube patterns change. With a creator's own earlier videos the history model reaches 0.57 and 0.72 on unseen channels, which is the main reason to add your data. These scores show useful signal but are not guarantees for individual videos.
 
 ### Is feature importance causal?
 
@@ -48,7 +48,7 @@ No. It shows which inputs the model used most while fitting this dataset. It doe
 
 ### Why does the app show a range, and can I trust it?
 
-The app shows an 80 % **split-conformal** interval. We calibrate on the model's out-of-fold errors (the 80th percentile of the absolute error), so about 80 % of true values should fall inside. We do not just assert this: coverage was 80.0 % out-of-fold and 79.7 % (views) / 80.9 % (engagement) on a chronological holdout the calibration never saw. The honest reading is that the interval is wide (a views forecast is typically within x0.29 to x3.5) because metadata alone is a moderate signal. The earlier tree-disagreement spread is not a probability, so it is no longer the headline.
+The app shows an 80 % **split-conformal** interval. We calibrate on the model's out-of-fold errors (the 80th percentile of the absolute error), so about 80 % of true values should fall inside. We do not just assert this: the intervals are calibrated on channels the model had not seen (80.0 % out-of-fold) and held 86 % (views) / 88 % (engagement) on a later-in-time holdout, which includes some channels the model already knew, so it may over-cover. Eleven categories with at least 120 videos have their own width; smaller categories use the overall width. The honest reading is that the interval is wide (a views forecast is typically within x0.22 to x4.6) because metadata alone is a moderate signal. The earlier tree-disagreement spread is not a probability, so it is no longer the headline.
 
 ### How does the "Why this forecast" chart work?
 
@@ -86,6 +86,8 @@ Collect current uploads from the YouTube Data API at a fixed age, including non-
 | Unique videos after de-duplication | 16,307 |
 | Original Linear Regression R²: log views / engagement | 0.197 / 0.384 |
 | Original Random Forest held-out R²: log views / engagement | 0.378 / 0.612 |
-| TA4 advanced model 5-fold CV R²: log views / engagement | 0.419 / 0.637 |
-| TA4 chronological holdout R²: log views / engagement | 0.368 / 0.529 |
-| 80 % interval coverage, later uploads: views / engagement | 79.7 % / 80.9 % |
+| TA4 advanced model shuffled 5-fold CV R² (optimistic): log views / engagement | 0.433 / 0.642 |
+| TA4 advanced model on channels never seen (honest): log views / engagement | 0.187 / 0.378 |
+| TA4 chronological holdout R²: log views / engagement | 0.380 / 0.553 |
+| History model (your own videos), unseen channels: log views / engagement | 0.575 / 0.725 |
+| 80 % interval coverage, later uploads: views / engagement | 85.9 % / 87.7 % |

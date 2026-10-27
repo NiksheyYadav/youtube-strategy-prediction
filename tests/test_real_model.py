@@ -77,7 +77,10 @@ def test_a_dead_server_falls_back_to_rules_without_trying_further_models(bundle,
 
 
 def test_ai_coach_tab_end_to_end_with_the_real_model(runtime):
-    app = AppTest.from_file(str(APP_PATH), default_timeout=900).run()
+    from tests.test_app import write_draft
+    from tests.real_videos import REAL_VIDEOS
+
+    app = write_draft(AppTest.from_file(str(APP_PATH), default_timeout=900).run(), REAL_VIDEOS[0])  # the form starts empty
     next(b for b in app.button if b.key == "coach_generate").click().run()
     assert not app.exception
     metrics = {m.label: m.value for m in app.metric}

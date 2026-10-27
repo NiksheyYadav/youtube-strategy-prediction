@@ -127,6 +127,27 @@ def _number(series: pd.Series) -> pd.Series:
     return pd.to_numeric(series.astype(str).str.replace(r"[,\s]", "", regex=True), errors="coerce")
 
 
+_SLASH_DATE = re.compile(r"^\s*(\d{1,2})[/.\-](\d{1,2})[/.\-](\d{2,4})")
+
+
+def _slash_date_order(raw_dates: pd.Series) -> tuple[bool, bool]:
+    """(day first?, still ambiguous?) for dates such as 02/03/2024.
+
+    A date like 25/03/2024 can only be day/month and 03/25/2024 only month/day, so one such value settles the whole file.  When every
+    value could be either, month/day is assumed and the caller says so (guessing silently would shift videos by months).
+    """
+    pairs = [(int(m.group(1)), int(m.group(2))) for m in raw_dates.map(_SLASH_DATE.match).dropna()]
+    if not pairs:
+        return False, False
+    first_over_12 = any(first > 12 for first, _ in pairs)
+    second_over_12 = any(second > 12 for _, second in pairs)
+    if first_over_12 and not second_over_12:
+        return True, False
+    if second_over_12 and not first_over_12:
+        return False, False
+    return False, not (first_over_12 or second_over_12)
+
+
 def clean_videos(frame: pd.DataFrame, *, source: str) -> ChannelHistory:
     """Validate a table that already uses (some of) the canonical column names; used for uploads and for API results."""
     notes: list[str] = []
@@ -142,9 +163,13 @@ def clean_videos(frame: pd.DataFrame, *, source: str) -> ChannelHistory:
     for column in ("likes", "comments", "duration_s"):
         out[column] = _number(out[column])
     raw_dates = out["publish_time"].astype(str)
-    out["publish_time"] = pd.to_datetime(raw_dates, errors="coerce", utc=True, format="mixed")
+    day_first, ambiguous = _slash_date_order(raw_dates)
+    out["publish_time"] = pd.to_datetime(raw_dates, errors="coerce", utc=True, dayfirst=day_first, format="mixed")
     if out["publish_time"].isna().mean() > 0.2:
-        out["publish_time"] = pd.to_datetime(raw_dates, errors="coerce", utc=True, dayfirst=True, format="mixed")
+        out["publish_time"] = pd.to_datetime(raw_dates, errors="coerce", utc=True, dayfirst=not day_first, format="mixed")
+    elif ambiguous:
+        notes.append("Some dates are written like 02/03/2024, which could be 2 March or 3 February. They were read as month/day. "
+                     "If your file uses day/month, export the dates in the YouTube Studio format (for example 'Mar 2, 2024') or as 2024-03-02.")
     before = len(out)
     out = out[(out["title"] != "") & out["views"].notna() & (out["views"] >= 0) & out["publish_time"].notna()]
     if before - len(out):

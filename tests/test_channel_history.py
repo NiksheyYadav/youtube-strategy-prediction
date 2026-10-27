@@ -16,6 +16,7 @@ from src.channel_history import (
     summarise,
 )
 from src.history_features import history_row
+from tests.real_data import requires_data
 
 STUDIO_TABLE = (
     "Content,Video title,Video publish time,Duration,Views,Watch time (hours),Subscribers,Impressions,Impressions click-through rate (%)\n"
@@ -173,3 +174,38 @@ def test_error_messages_use_plain_words_not_internal_column_names():
         parse_upload("x.csv", b"a,b,c\n1,2,3\n")
     message = str(caught.value)
     assert "publish_time" not in message and "a video title" in message and "Table data.csv" in message
+
+
+# ----------------------------------------------------------------------------------------------- dates written with slashes
+def _real_rows_as_csv(date_format: str, *, only_days_up_to_12: bool = False) -> tuple[bytes, pd.Series]:
+    """Real videos from the data, written with their publish dates in the given format (the way a creator's spreadsheet might)."""
+    from tests.real_data import _clean
+
+    data = _clean()
+    data["when"] = pd.to_datetime(data["publish_time"], utc=True)
+    counts = data["channel_title"].value_counts()
+    rows = data[data["channel_title"] == counts.index[0]].sort_values("when").head(40)
+    if only_days_up_to_12:
+        rows = rows[rows["when"].dt.day <= 12]
+    assert len(rows) >= 8
+    lines = ["Video title,Video publish time,Views"]
+    for title, when, views in zip(rows["title"], rows["when"], rows["views"]):
+        lines.append(f'"{title.replace(chr(34), chr(39))}",{when.strftime(date_format)},{int(views)}')
+    return "\n".join(lines).encode("utf-8"), rows["when"].dt.date.reset_index(drop=True)
+
+
+@requires_data
+@pytest.mark.parametrize("date_format", ["%d/%m/%Y", "%m/%d/%Y"])
+def test_slash_dates_are_read_the_way_they_were_written_when_the_file_makes_it_clear(date_format):
+    content, expected = _real_rows_as_csv(date_format)
+    history = parse_upload("Table data.csv", content)
+    # a day above 12 appears somewhere in the file, so day/month versus month/day is not a guess
+    assert list(history.videos["publish_time"].dt.date) == sorted(expected)
+    assert not any("could be 2 March" in note for note in history.notes)
+
+
+@requires_data
+def test_slash_dates_that_could_be_either_order_are_read_month_first_and_the_user_is_told():
+    content, _ = _real_rows_as_csv("%m/%d/%Y", only_days_up_to_12=True)
+    history = parse_upload("Table data.csv", content)
+    assert any("could be 2 March or 3 February" in note for note in history.notes)

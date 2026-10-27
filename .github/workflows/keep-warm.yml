@@ -1,6 +1,8 @@
 name: Keep Render service warm
 
 # Render's free tier spins a service down after ~15 minutes without traffic.
+# This job is BEST-EFFORT only: in practice GitHub starts it every few hours, not every 10 minutes, so it does not reliably
+# keep the site awake. For a reliable wake-up use a free outside monitor (see docs/PROJECT_GUIDE.md, section 9).
 # GitHub cron is best-effort and busy slots (:00, :10, ...) are often skipped, so use off-peak minutes every 10 minutes.
 # Disable without a code change: repo Settings > Variables > KEEP_WARM_ENABLED = false.
 on:

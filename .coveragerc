@@ -1,0 +1,11 @@
+# python -m coverage run -m pytest -q -p no:cacheprovider -m "not browser" && python -m coverage report
+# app.py is exercised through Streamlit's AppTest and the browser tests, which run it in another process, so it is measured
+# only in the AppTest runs; the browser tests are therefore left out of the coverage number.
+[run]
+source = src, app
+omit =
+    src/__init__.py
+
+[report]
+show_missing = False
+skip_empty = True
