@@ -42,28 +42,31 @@ def _tags(raw: str) -> list[str]:
 _OWN_PATTERN_ACTIONS = {
     # label -> (action when the pattern is positive, action when it is negative, does the draft already have the feature?)
     "a number in the title": ("Consider adding a number to the title", "Reconsider the number in the title",
-                              lambda d: any(ch.isdigit() for ch in d.title)),
+                              lambda d: any(ch.isdigit() for ch in d.title), "number"),
     "a title that starts with 'how'": ("Consider starting the title with 'How'", "Reconsider starting the title with 'How'",
-                                       lambda d: d.title.strip().lower().startswith("how")),
+                                       lambda d: d.title.strip().lower().startswith("how"), "how_to"),
     "a question in the title": ("Consider phrasing the title as a question", "Reconsider phrasing the title as a question",
-                                lambda d: "?" in d.title),
-    "a weekend publish day": ("Consider publishing at the weekend", "Reconsider the weekend publish day", lambda d: d.day_of_week >= 5),
+                                lambda d: "?" in d.title, "question"),
+    "a weekend publish day": ("Consider publishing at the weekend", "Reconsider the weekend publish day", lambda d: d.day_of_week >= 5, None),
 }
 
 
-def _own_history_priorities(packet: EvidencePacket) -> list[dict]:
-    """Priorities taken from patterns in the creator's own videos (only clear, well-supported ones; always low confidence)."""
+def _own_history_priorities(packet: EvidencePacket) -> list[tuple[dict, str | None]]:
+    """Priorities taken from patterns in the creator's own videos (only clear, well-supported ones; always low confidence).
+
+    Each comes with the key of the matching model-scored edit (or None), so the same advice is never given twice.
+    """
     out = []
     for fact in packet.by_kind("channel_pattern"):
         entry = _OWN_PATTERN_ACTIONS.get(fact.data["label"])
         if entry is None:
             continue
-        positive, negative, has_feature = entry
+        positive, negative, has_feature, edit_key = entry
         has_it = has_feature(packet.draft)
         if fact.data["ratio"] > 1 and not has_it:
-            out.append({"action": positive, "why": fact.text, "evidence": [fact.id], "confidence": "low"})
+            out.append(({"action": positive, "why": fact.text, "evidence": [fact.id], "confidence": "low"}, edit_key))
         elif fact.data["ratio"] < 1 and has_it:
-            out.append({"action": negative, "why": fact.text, "evidence": [fact.id], "confidence": "low"})
+            out.append(({"action": negative, "why": fact.text, "evidence": [fact.id], "confidence": "low"}, edit_key))
     return out
 
 
@@ -78,7 +81,15 @@ def rules_recommendation(packet: EvidencePacket) -> dict:
     if packet.gates["timing"] and len(priorities) < 3:
         priorities.append({"action": f"Consider publishing {timing.data['best_day']} {timing.data['best_hour']:02d}:00 IST",
                            "why": timing.text, "evidence": [timing.id], "confidence": "low"})
-    own = _own_history_priorities(packet)
+    own = []
+    lowered_by_model = {f.data["key"] for f in packet.by_kind("edit_down")}
+    for item, edit_key in _own_history_priorities(packet):
+        same_advice = next((p for p in priorities if edit_key and any(
+            f.id in p["evidence"] and f.data.get("key") == edit_key for f in packet.by_kind("edit_up"))), None)
+        if same_advice is not None:
+            same_advice["evidence"] = same_advice["evidence"] + item["evidence"]  # the model-scored edit is also backed by their own history
+        elif edit_key not in lowered_by_model:  # never contradict a model-scored edit that lowers the forecast
+            own.append(item)
     if not priorities and not own:
         priorities.append({"action": "Keep the draft as it is: no tested edit changed the forecast enough to rise above model noise",
                            "why": forecast.text, "evidence": [forecast.id], "confidence": "low"})
@@ -295,8 +306,8 @@ def merge_llm(skeleton: dict, llm: dict, packet: EvidencePacket) -> tuple[dict, 
             return None
         return text
 
-    if (text := accept(llm.get("summary", ""))):
-        merged["summary"], used = text, used + 1
+    if not packet.by_kind("channel_forecast") and (text := accept(llm.get("summary", ""))):
+        merged["summary"], used = text, used + 1  # (with channel data the rule-based summary states the channel forecast exactly)
     for key, field in (("priority_explanations", "priorities"), ("weakness_explanations", "weaknesses")):
         for item, raw in zip(merged[field], llm.get(key, [])):
             if (text := accept(raw)):

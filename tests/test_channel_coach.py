@@ -85,15 +85,37 @@ def test_too_little_history_adds_no_channel_facts(bundle, models):
     assert not any(fact.kind.startswith("channel_") for fact in packet.facts)
 
 
-def test_rules_turn_a_clear_own_pattern_into_a_priority_that_cites_its_evidence(bundle, models):
+def _cited_kinds(packet, recommendation):
+    by_id = {fact.id: fact for fact in packet.facts}
+    return [by_id[ident].kind for item in recommendation["priorities"] for ident in item["evidence"]]
+
+
+def test_rules_use_a_clear_own_pattern_and_cite_its_evidence(bundle, models):
     packet, _ = packet_for(bundle, models, PLAIN, make_channel())
     recommendation = rules_recommendation(packet)
-    own = [item for item in recommendation["priorities"] if item["action"] == "Consider adding a number to the title"]
-    assert len(own) == 1 and own[0]["confidence"] == "low"
-    cited = {fact.id: fact for fact in packet.facts}[own[0]["evidence"][0]]
-    assert cited.kind == "channel_pattern"
+    assert "channel_pattern" in _cited_kinds(packet, recommendation), "the creator's own pattern must back one of the priorities"
     assert validate_recommendation(recommendation, packet) == []
     assert recommendation["summary"].startswith("For your channel")
+
+
+def test_the_same_advice_is_never_given_twice(bundle, models):
+    """A model-scored 'Add a number' edit and the own-history 'number' pattern are one piece of advice with two sources."""
+    packet, _ = packet_for(bundle, models, PLAIN, make_channel())
+    actions = [item["action"].lower() for item in rules_recommendation(packet)["priorities"]]
+    assert sum("number" in action for action in actions) <= 1
+    assert len(set(actions)) == len(actions)
+
+
+def test_with_channel_data_a_language_model_cannot_rewrite_the_exact_channel_summary(bundle, models):
+    from src.recommendations import merge_llm
+
+    packet, _ = packet_for(bundle, models, PLAIN, make_channel())
+    skeleton = rules_recommendation(packet)
+    merged, _, _ = merge_llm(skeleton, {"summary": "A friendly paraphrase without any numbers."}, packet)
+    assert merged["summary"] == skeleton["summary"] and merged["summary"].startswith("For your channel")
+    plain_packet = build_evidence(bundle, PLAIN)
+    plain_merged, used, _ = merge_llm(rules_recommendation(plain_packet), {"summary": "A friendly paraphrase without any numbers."}, plain_packet)
+    assert plain_merged["summary"] == "A friendly paraphrase without any numbers." and used >= 1  # unchanged behaviour without channel data
 
 
 def test_a_draft_that_already_has_the_good_feature_is_not_told_to_add_it(bundle, models):
