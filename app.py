@@ -25,8 +25,11 @@ from src.insights import (
     top_keywords,
 )
 
+from src.env_file import load_env_file
 from src.recommendations import generate_recommendation, resolve_runtime
 from src.ui_text import escape_markdown
+
+load_env_file()  # optional ./.env settings (LLM model, Google sign-in); real environment variables always win
 
 st.set_page_config(
     page_title="Signal Studio | YouTube Strategy",

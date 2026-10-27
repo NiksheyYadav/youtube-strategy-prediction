@@ -1,0 +1,59 @@
+{
+  "videos": 16307,
+  "share_with_usable_history": 0.7746366591034525,
+  "min_usable_videos": 3,
+  "level_shift_log": -3.0,
+  "chronological": {
+    "cold": {
+      "deployable_r2": 0.36821214816351355,
+      "history_rows_r2": 0.3941683968345332
+    },
+    "absolute": {
+      "deployable_r2": 0.5650975280535218,
+      "history_rows_r2": 0.6221061804458619,
+      "stress_r2_small_channel": -0.1464798602333861
+    },
+    "lift": {
+      "deployable_r2": 0.5585299645373323,
+      "history_rows_r2": 0.6145027927669838,
+      "stress_r2_small_channel": 0.6145027927669838
+    },
+    "lift+level": {
+      "deployable_r2": 0.5719260196800958,
+      "history_rows_r2": 0.6300116493417205,
+      "stress_r2_small_channel": 0.5566444604696185
+    },
+    "engagement": {
+      "cold_r2": 0.5341732492461266,
+      "absolute_history_rows_r2": 0.7059635331388662,
+      "cold_history_rows_r2": 0.5675505746703631
+    }
+  },
+  "unseen_channels": {
+    "cold": {
+      "deployable_r2": 0.17561258758814607,
+      "history_rows_r2": 0.1850236215273799
+    },
+    "absolute": {
+      "deployable_r2": 0.4562423332038762,
+      "history_rows_r2": 0.5771227840508285,
+      "stress_r2_small_channel": -0.5784980797172757
+    },
+    "lift": {
+      "deployable_r2": 0.4550347589128406,
+      "history_rows_r2": 0.575421001894363,
+      "stress_r2_small_channel": 0.575421001894363
+    },
+    "lift+level": {
+      "deployable_r2": 0.46630164379353,
+      "history_rows_r2": 0.5911316642163473,
+      "stress_r2_small_channel": 0.5322017098382984
+    },
+    "engagement": {
+      "cold_r2": 0.3363654127442272,
+      "absolute_history_rows_r2": 0.741436079027846,
+      "cold_history_rows_r2": 0.3445398214799086
+    }
+  },
+  "note": "stress_r2_small_channel is a synthetic what-if (channel made ~20x smaller), not a measured accuracy."
+}
