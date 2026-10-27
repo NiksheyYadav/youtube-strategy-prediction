@@ -748,14 +748,14 @@ def render_method(bundle: dict[str, object]) -> None:
         views_metrics, engagement_metrics = metrics["views_log"], metrics["engagement_rate"]
         rows, notes = [], []
         if "unseen_channel_cv" in views_metrics:
-            rows.append(("Channels never seen in training (the honest test)", views_metrics["unseen_channel_cv"]["r2_mean"],
+            rows.append(("Unseen channels (honest)", views_metrics["unseen_channel_cv"]["r2_mean"],
                          engagement_metrics["unseen_channel_cv"]["r2_mean"]))
-            notes.append("A new creator is a channel the model has never seen, so that row is the one to trust.")
-        rows.append(("Later uploads (trained on earlier ones)", views_metrics["chronological_holdout"]["r2"], engagement_metrics["chronological_holdout"]["r2"]))
-        rows.append(("Shuffled 5-fold (same channels on both sides)", views_metrics["five_fold_cv"]["r2_mean"], engagement_metrics["five_fold_cv"]["r2_mean"]))
+            notes.append("Unseen channels: the model is tested on channels it never saw while learning. A new creator is such a channel, so that row is the one to trust.")
+        rows.append(("Later uploads", views_metrics["chronological_holdout"]["r2"], engagement_metrics["chronological_holdout"]["r2"]))
+        rows.append(("Shuffled 5-fold", views_metrics["five_fold_cv"]["r2_mean"], engagement_metrics["five_fold_cv"]["r2_mean"]))
         table = pd.DataFrame(rows, columns=["Test", "Views R²", "Engagement R²"])
         st.dataframe(table.style.format({"Views R²": "{:.2f}", "Engagement R²": "{:.2f}"}), hide_index=True, width="stretch")
-        st.caption(" ".join(notes + ["The shuffled test reads highest because it lets the model see the same channel while learning and while being tested."]))
+        st.caption(" ".join(notes + ["Later uploads: trained on earlier videos, tested on later ones. Shuffled 5-fold reads highest because it lets the model see the same channel while learning and while being tested."]))
         by_script = views_metrics.get("unseen_channel_by_title_script") or {}
         if "latin_titles" in by_script and "non_latin_titles" in by_script:
             st.caption(f"On unseen channels, views R² is {by_script['latin_titles']['r2']:.2f} for titles in the Latin alphabet and "
