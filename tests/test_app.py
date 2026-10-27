@@ -7,26 +7,60 @@ from pathlib import Path
 import pytest
 from streamlit.testing.v1 import AppTest
 
+from src.insights import DAYS
 from tests.real_data import real_channel, requires_data
+from tests.real_videos import REAL_VIDEOS
 
 
 APP_PATH = Path(__file__).resolve().parents[1] / "app.py"
-
-
-@pytest.fixture()
-def app():
-    return AppTest.from_file(str(APP_PATH), default_timeout=180).run()
 
 
 def _button(app: AppTest, label: str):
     return next(button for button in app.button if button.label == label)
 
 
-def test_app_boots_with_every_tab_and_no_exception(app):
-    assert not app.exception
-    assert [tab.label for tab in app.tabs] == [
+def write_draft(app: AppTest, video: dict) -> AppTest:
+    """Fill the form the way a person does and press the button. The drafts are real videos from the India-trending data."""
+    app.text_area(key="main_title").set_value(video["title"])
+    app.selectbox(key="main_category").select(video["category"])
+    app.selectbox(key="main_day").select(DAYS[video["day"]])
+    app.slider(key="main_hour").set_value(video["hour"])
+    app.text_input(key="main_tags").set_value(video["tags"])
+    app.text_area(key="main_description").set_value(video["description"])
+    _button(app, "Generate pre-publication forecast").click()
+    return app.run()
+
+
+@pytest.fixture()
+def fresh():
+    """What a new visitor sees: nothing written yet."""
+    return AppTest.from_file(str(APP_PATH), default_timeout=180).run()
+
+
+@pytest.fixture()
+def app(fresh):
+    """A visitor who has written a draft."""
+    return write_draft(fresh, REAL_VIDEOS[0])
+
+
+def test_a_new_visitor_sees_an_empty_form_and_a_clear_next_step_not_sample_data(fresh):
+    assert not fresh.exception
+    assert [tab.label for tab in fresh.tabs] == [
         "Forecast studio", "My channel", "Best time", "Title lab", "AI coach", "Similar videos", "Scenario lab", "YouTube timeline", "Model brief",
     ]
+    for key in ("main_title", "main_tags", "main_description"):
+        assert fresh.session_state[key] == "", f"{key} must start empty"
+    metrics = {metric.label for metric in fresh.metric}
+    assert "Expected views" not in metrics, "no forecast for a draft nobody has written"
+    cards = " ".join(markdown.value for markdown in fresh.markdown)
+    assert cards.count("Start with your draft") >= 6, "every tab that needs a draft explains what to do instead of staying blank"
+    text = cards + " ".join(caption.value for caption in fresh.caption) + " ".join(markdown.value for markdown in fresh.sidebar.markdown)
+    assert "demo" not in text.lower() and "viva" not in text.lower(), "the screen must not read like a demo"
+    assert not [button for button in fresh.button if button.label == "Load this video"]
+
+
+def test_app_boots_with_every_tab_and_no_exception(app):
+    assert not app.exception
     metrics = {metric.label: metric.value for metric in app.metric}
     assert metrics["Expected views"] and metrics["Expected engagement"]
     assert "Best slot #1" in metrics
@@ -65,24 +99,13 @@ def test_personal_forecast_explains_when_there_is_too_little_history(app):
     assert any("settled" in info.value for info in app.info)
 
 
-def test_every_real_example_video_produces_a_forecast_and_shows_what_really_happened(app):
-    options = list(app.selectbox(key="example_choice").options)
-    assert len(options) == 4, "the four real videos from knowledge/real_examples.json"
-    for name in options:
-        app.selectbox(key="example_choice").select(name).run()
-        _button(app, "Load this video").click().run()
-        assert not app.exception, name
-        assert any(metric.label == "Expected views" for metric in app.metric), name
-        banner = " ".join(info.value for info in app.info)
-        assert "This is a real video" in banner and "actually got" in banner and "not a fair test" in banner, name
-
-
-def test_the_real_video_note_disappears_once_the_user_changes_the_title(app):
-    assert any("This is a real video" in info.value for info in app.info)
-    app.text_area(key="main_title").set_value("Something I wrote myself")  # inside a form the value only counts when submitted
-    _button(app, "Generate pre-publication forecast").click().run()
-    assert not app.exception
-    assert not any("This is a real video" in info.value for info in app.info)
+@pytest.mark.parametrize("index", range(len(REAL_VIDEOS)))
+def test_every_real_draft_produces_a_forecast_in_every_draft_tab(fresh, index):
+    write_draft(fresh, REAL_VIDEOS[index])
+    assert not fresh.exception, REAL_VIDEOS[index]["title"]
+    labels = {metric.label for metric in fresh.metric}
+    assert {"Expected views", "Expected engagement", "Best slot #1"} <= labels
+    assert "Start with your draft" not in " ".join(markdown.value for markdown in fresh.markdown)
 
 
 def test_applying_a_suggestion_updates_the_form_and_reforecasts(app):
@@ -104,7 +127,8 @@ def test_blank_title_is_explained_not_crashed(app):
     app.text_area(key="main_title").set_value("   ")
     _button(app, "Generate pre-publication forecast").click().run()
     assert not app.exception
-    assert any("title" in info.value.lower() for info in app.info)
+    assert "Start with your draft" in " ".join(markdown.value for markdown in app.markdown)
+    assert "Expected views" not in {metric.label for metric in app.metric}
 
 
 def test_ab_comparison_reports_uncertainty(app):
@@ -124,7 +148,7 @@ NOT_READY = RuntimeStatus(PROFILE, LLMConfig(), None, None, (), ModelChoice(None
 
 def _coach_without_model(monkeypatch):
     monkeypatch.setattr("src.recommendations.resolve_runtime", lambda: NOT_READY)
-    app = AppTest.from_file(str(APP_PATH), default_timeout=180).run()
+    app = write_draft(AppTest.from_file(str(APP_PATH), default_timeout=180).run(), REAL_VIDEOS[0])
     next(b for b in app.button if b.key == "coach_generate").click().run()
     return app
 
@@ -218,19 +242,16 @@ def test_youtube_timeline_tab_lists_sourced_entries_and_can_hide_press_reports(a
 
 
 def test_draft_b_follows_draft_a_until_the_user_edits_it(app):
-    """Regression: after loading another video, Draft A changed but Draft B silently kept the old draft."""
+    """Regression: after Draft A changed, Draft B silently kept the old draft."""
     first = app.session_state["main_title"]
     assert app.session_state["compare_title"] == first
-    options = list(app.selectbox(key="example_choice").options)
-    app.selectbox(key="example_choice").select(options[1]).run()
-    _button(app, "Load this video").click().run()
+    write_draft(app, REAL_VIDEOS[1])
     assert not app.exception
     assert app.session_state["main_title"] != first
     assert app.session_state["compare_title"] == app.session_state["main_title"], "an untouched Draft B must follow Draft A"
 
     app.text_area(key="compare_title").set_value("My own variant of the title").run()
-    app.selectbox(key="example_choice").select(options[2]).run()
-    _button(app, "Load this video").click().run()
+    write_draft(app, REAL_VIDEOS[2])
     assert app.session_state["compare_title"] == "My own variant of the title", "a Draft B the user edited must be left alone"
 
 

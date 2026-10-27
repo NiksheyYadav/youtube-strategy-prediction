@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import re
 import time
 from pathlib import Path
@@ -50,19 +49,7 @@ st.set_page_config(
 
 TEAL, CORAL, SAND, INK = "#00BFA6", "#FF725E", "#F4EEE5", "#071116"
 
-REAL_EXAMPLES_PATH = Path(__file__).resolve().parent / "knowledge" / "real_examples.json"
-
-
-def load_real_examples() -> dict[str, dict[str, object]]:
-    """Real India-trending videos, taken unchanged from the dataset (chosen by scripts/pick_real_examples.py)."""
-    try:
-        videos = json.loads(REAL_EXAMPLES_PATH.read_text(encoding="utf-8"))["videos"]
-    except (OSError, ValueError, KeyError):
-        return {}
-    return {f"{video['category']}: {str(video['title'])[:46]}": video for video in videos}
-
-
-EXAMPLES: dict[str, dict[str, object]] = load_real_examples()
+DEFAULT_CATEGORY, DEFAULT_DAY, DEFAULT_HOUR = "Entertainment", 4, 18  # starting positions of the controls only; the text fields start empty
 
 
 # --------------------------------------------------------------------------- #
@@ -263,15 +250,14 @@ def draft_tips(feature_row: pd.DataFrame, summary: dict[str, dict[str, float]]) 
 # Session state: one source of truth for the current draft
 # --------------------------------------------------------------------------- #
 def init_state(categories: list[str]) -> None:
-    example = next(iter(EXAMPLES.values()), {"title": "", "category": categories[0], "day": 0, "hour": 12, "tags": "", "description": ""})
-    st.session_state.setdefault("real_example", example if example.get("video_id") else None)
+    """A new visitor starts with an empty draft: the forecast appears once they write their own title."""
     defaults = {
-        "main_title": example["title"],
-        "main_category": example["category"] if example["category"] in categories else categories[0],
-        "main_day": DAYS[int(example["day"])],
-        "main_hour": int(example["hour"]),
-        "main_tags": example["tags"],
-        "main_description": example["description"],
+        "main_title": "",
+        "main_category": DEFAULT_CATEGORY if DEFAULT_CATEGORY in categories else categories[0],
+        "main_day": DAYS[DEFAULT_DAY],
+        "main_hour": DEFAULT_HOUR,
+        "main_tags": "",
+        "main_description": "",
     }
     for key, value in defaults.items():
         st.session_state.setdefault(key, value)
@@ -287,20 +273,6 @@ def read_form(prefix: str) -> dict[str, object]:
         "tags": st.session_state[f"{prefix}_tags"],
         "description": st.session_state[f"{prefix}_description"],
     }
-
-
-def load_example(categories: list[str]) -> None:
-    example = EXAMPLES[st.session_state["example_choice"]]
-    st.session_state["real_example"] = example
-    st.session_state.update(
-        main_title=example["title"],
-        main_category=example["category"] if example["category"] in categories else categories[0],
-        main_day=DAYS[int(example["day"])],
-        main_hour=int(example["hour"]),
-        main_tags=example["tags"],
-        main_description=example["description"],
-    )
-    st.session_state["proposal"] = read_form("main")
 
 
 def apply_draft(draft: Draft) -> None:
@@ -319,8 +291,8 @@ def apply_draft(draft: Draft) -> None:
 def proposal_inputs(prefix: str, categories: list[str]) -> dict[str, object]:
     """Render the proposal form; widget values live in session state under ``prefix``."""
     st.text_area(
-        "Video title", max_chars=120, height=74, key=f"{prefix}_title",
-        help="Use a real draft title. The model extracts text-style features locally.",
+        "Video title", max_chars=120, height=74, key=f"{prefix}_title", placeholder="Your working title",
+        help="The model reads the title's wording and style (length, numbers, questions, capitals, script) on your computer.",
     )
     left, right = st.columns(2)
     with left:
@@ -328,8 +300,9 @@ def proposal_inputs(prefix: str, categories: list[str]) -> dict[str, object]:
         st.selectbox("Publish day (IST)", DAYS, key=f"{prefix}_day")
     with right:
         st.slider("Publish hour (IST)", 0, 23, key=f"{prefix}_hour", help="24-hour clock. 18 means 6:00 PM IST.")
-        st.text_input("Tags", key=f"{prefix}_tags", help="Separate tags with commas, semicolons, or vertical bars.")
-    st.text_area("Description", height=104, max_chars=5000, key=f"{prefix}_description")
+        st.text_input("Tags", key=f"{prefix}_tags", placeholder="Separate tags with commas",
+                      help="Separate tags with commas, semicolons, or vertical bars. Optional.")
+    st.text_area("Description", height=104, max_chars=5000, key=f"{prefix}_description", placeholder="Your video description (optional)")
     return read_form(prefix)
 
 
@@ -362,15 +335,14 @@ def explanation_chart(table: pd.DataFrame) -> alt.Chart:
     )
 
 
-def render_real_outcome(draft: Draft) -> None:
-    """When the draft is one of the real example videos, show what really happened to it (it is in the training data: not a fair test)."""
-    example = st.session_state.get("real_example")
-    if not example or not example.get("video_id") or draft.title.strip() != str(example["title"]).strip():
-        return
-    st.info(
-        f"**This is a real video** ({esc(str(example['channel']))}). It actually got **{compact_number(example['actual_views'])}** views and "
-        f"**{as_percent(example['actual_engagement'])}** engagement. It is part of the training data, so this is not a fair test of the model. "
-        f"[Open it on YouTube](https://www.youtube.com/watch?v={example['video_id']})"
+def render_start_here(what: str = "forecast") -> None:
+    """Shown instead of a result while the draft has no title: say what to do next, in one short card."""
+    st.markdown(
+        f"<div class='signal-note'><b>Start with your draft.</b><br>Write a working title in the <b>Forecast studio</b> tab and press "
+        f"<b>Generate pre-publication forecast</b>. This tab then shows the {what} for that draft. "
+        "To see what the model expects for <b>your</b> channel, add your earlier videos in the <b>My channel</b> tab "
+        "(sign in with YouTube, or upload a YouTube Studio export).</div>",
+        unsafe_allow_html=True,
     )
 
 
@@ -468,7 +440,6 @@ def render_forecast(bundle: dict[str, object], draft: Draft) -> None:
                    f"had not seen, its views score for such titles was only R² {script_accuracy['r2']:.2f} (against "
                    f"{headline_accuracy(bundle)['views_r2']:.2f} overall), so the forecast is rough. Category and timing are the parts to trust.")
 
-    render_real_outcome(draft)
     render_personal_panel(bundle, draft)
 
     if result.out_of_range_features:
@@ -779,7 +750,7 @@ def render_method(bundle: dict[str, object]) -> None:
         f"x{calibration['views_multiplier_high']:.2f} of the truth. Intervals that are wide are the honest answer when the signal is weak."
     )
 
-    with st.expander("How the whole system works (for the viva)"):
+    with st.expander("How the whole system works"):
         st.markdown(
             "**Data** → India trending snapshots, de-duplicated to one row per video (16,307).  \n"
             "**Features** → only things known before upload: title style, tags, description, category, IST publish time.  \n"
@@ -1071,7 +1042,7 @@ def render_my_channel() -> None:
 def _privacy_note() -> None:
     st.caption(
         "Privacy: your file or channel data is read in memory for this browser session only. It is not saved to disk and not written to any log. "
-        "On the online demo it is processed in that server's memory; run the app on your own computer if you want it never to leave it."
+        "On the hosted website it is processed in that server's memory; run the app on your own computer if you want it never to leave it."
     )
 
 
@@ -1103,26 +1074,24 @@ def main() -> None:
         unsafe_allow_html=True,
     )
 
-    metrics = bundle["metrics"]
     with st.sidebar:
-        st.markdown("### Try a real video")
-        st.selectbox("Load a real trending video", list(EXAMPLES), key="example_choice",
-                     help="Real India-trending videos from the dataset, unchanged. They are part of the training data.")
-        st.button("Load this video", on_click=load_example, args=(categories,), width="stretch", disabled=not EXAMPLES)
-        st.markdown("### About this demo")
-        st.write(f"**{bundle['training_rows']:,}** unique India-trending videos")
+        st.markdown("### Your channel")
+        channel_loaded = st.session_state.get("channel")
+        if channel_loaded is None:
+            st.write("No channel data added yet.")
+            st.caption("Open the **My channel** tab to sign in with YouTube or upload a YouTube Studio export. "
+                       "The forecast then starts from your own usual views instead of a typical trending video.")
+        else:
+            st.write(f"**{len(channel_loaded.videos)}** videos loaded")
+            st.button("Remove my data", on_click=clear_channel, width="stretch", key="clear_channel_sidebar")
+        st.markdown("### About the model")
+        st.write(f"Learned from **{bundle['training_rows']:,}** India-trending videos")
         accuracy = headline_accuracy(bundle)
         st.write(f"Views R² **{accuracy['views_r2']:.2f}** · engagement R² **{accuracy['engagement_r2']:.2f}**")
         st.caption(f"Measured on {accuracy['basis']}. R² is the share of the spread in the results that the model explains; "
                    "1.0 would be perfect and 0 means no better than guessing the average.")
         st.info("The trending-video forecast uses no likes, comments, views, channel information or thumbnail data as inputs. "
                 "If you add your own earlier videos (My channel tab), their view counts are used to personalise it.")
-        if st.session_state.get("channel") is not None:
-            st.markdown("### Your channel")
-            channel_loaded = st.session_state["channel"]
-            st.write(f"**{len(channel_loaded.videos)}** videos loaded")
-            st.button("Remove my data", on_click=clear_channel, width="stretch", key="clear_channel_sidebar")
-        st.caption("Flow for the demo: Forecast → My channel → Best time → Title lab → AI coach → Similar videos → Scenario lab → YouTube timeline.")
 
     studio, mine, timing, lab, coach, similar, scenario, platform, method = st.tabs(
         ["Forecast studio", "My channel", "Best time", "Title lab", "AI coach", "Similar videos", "Scenario lab", "YouTube timeline", "Model brief"]
@@ -1135,21 +1104,40 @@ def main() -> None:
         if submitted:
             st.session_state["proposal"] = proposal
         draft = to_draft(st.session_state["proposal"])
-        render_forecast(bundle, draft)
+        if draft.title.strip():
+            render_forecast(bundle, draft)
+        else:
+            render_start_here("forecast, the reasons behind it and the edits that would help")
 
     with mine:
         render_my_channel()
     draft = to_draft(st.session_state["proposal"])
+    has_draft = bool(draft.title.strip())
     with timing:
-        render_best_time(bundle, draft)
+        if has_draft:
+            render_best_time(bundle, draft)
+        else:
+            render_start_here("best publishing slots")
     with lab:
-        render_title_lab(bundle, draft)
+        if has_draft:
+            render_title_lab(bundle, draft)
+        else:
+            render_start_here("title ideas, each re-scored by the model")
     with coach:
-        render_coach(bundle, draft)
+        if has_draft:
+            render_coach(bundle, draft)
+        else:
+            render_start_here("written advice")
     with similar:
-        render_similar(bundle, draft)
+        if has_draft:
+            render_similar(bundle, draft)
+        else:
+            render_start_here("look-alike videos")
     with scenario:
-        render_scenario(bundle, categories, draft)
+        if has_draft:
+            render_scenario(bundle, categories, draft)
+        else:
+            render_start_here("side-by-side comparison")
     with platform:
         render_platform_timeline()
     with method:

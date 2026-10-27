@@ -11,3 +11,6 @@ headless = true
 # CORS stays ON (the default): a page from another website must not be able to open a connection to this app.
 enableXsrfProtection = true
 maxUploadSize = 10  # MB; the channel-data parser accepts at most 5 MB
+
+[client]
+toolbarMode = "viewer"  # hides the developer toolbar (the "Deploy" button) so the page looks like a finished product

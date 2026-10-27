@@ -74,7 +74,7 @@ def test_the_docker_image_contains_the_models_and_knowledge_the_app_loads():
 
 def test_the_runtime_files_really_exist_in_the_repository():
     for relative in ("models/advanced_model_bundle.joblib", "models/similarity_index.joblib", "models/history_models.joblib",
-                     "knowledge/youtube_platform_timeline.json", "knowledge/real_examples.json", ".streamlit/config.toml"):
+                     "knowledge/youtube_platform_timeline.json", ".streamlit/config.toml"):
         assert (ROOT / relative).is_file(), relative
 
 
