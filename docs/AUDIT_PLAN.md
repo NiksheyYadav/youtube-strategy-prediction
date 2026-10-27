@@ -85,6 +85,7 @@ Severity: **High** = could hurt your evaluation or mislead a user. **Medium** = 
 | E5 | Low | `run.ps1` can pick the Microsoft Store "python" stub on some Windows machines instead of trying `py`. | Code read |
 | E6 | Low | Upload errors use internal names ("Missing columns: title, publish_time"). | Browser test |
 | E7 | Low | Memory use is about 307 MB after heavy use. Render's free tier has 512 MB, so several simultaneous users could be a problem. | Process measurement |
+| E8 | High | **Reported by you:** the page crashed with `ValueError: Feature schema mismatch ... unexpected=['title_non_latin_share']` (from the Similar videos tab). The code had gained a feature while the saved model file still lacked it. Two causes: (1) a **running app keeps the old model in memory** and never notices a retrained file, and (2) a code/model mismatch shows a **raw stack trace** instead of a plain message. A mismatch can only be cured by retraining, and nothing told the user that. | Your paste; reproduced by a test |
 
 ### F. Gaps in the tests
 
@@ -120,6 +121,7 @@ I will work in this order, committing after each phase and re-running the full t
 9. Per-category interval calibration, with coverage measured per category (B2).
 10. Compute the **unseen-channel accuracy inside the training script**, store it, and have the app, README and reports read it instead of hard-coding old numbers (B1). Add a plain warning that the forecast is relative to *trending* videos, and a "title too short" warning (B5).
 11. Re-record the golden snapshot deliberately, with the reason written down.
+11a. (E8, added at your request) The model loader compares the saved model's features with the code's and refuses a mismatch with a plain message and the retrain command; every model cache is keyed on the file's modification time so a retrained model is picked up without restarting; tests reproduce your exact crash and check that the shipped models match the code.
 
 **Phase 3: real tests**
 12. Fix the circular PKCE test and add range-check tests (F2).

@@ -107,8 +107,9 @@ def build_evidence(
     calibration = bundle["calibration"]
     cover = calibration["coverage_check"]
     add("uncertainty",
-        f"Intervals are calibrated: they held {cover['views_chronological_holdout'] * 100:.0f}% (views) and "
-        f"{cover['engagement_chronological_holdout'] * 100:.0f}% (engagement) of the time on later uploads. A views forecast is "
+        f"Intervals are calibrated on channels the model had not seen (about 80% of them fall inside); on later uploads they held "
+        f"{cover['views_chronological_holdout'] * 100:.0f}% (views) and {cover['engagement_chronological_holdout'] * 100:.0f}% (engagement) "
+        f"of the time. A views forecast is "
         f"typically within x{calibration['views_multiplier_low']:.2f} to x{calibration['views_multiplier_high']:.2f} of the truth, "
         "so small differences are within model uncertainty.")
     if prediction.out_of_range_features:

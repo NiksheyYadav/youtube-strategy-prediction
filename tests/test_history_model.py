@@ -43,6 +43,13 @@ def test_training_returns_models_calibration_and_metrics(trained):
     assert set(metrics["interval_coverage_80"]) == {"views_unseen_channels", "views_later_videos", "engagement_later_videos"}
 
 
+def test_engagement_is_only_learned_from_videos_where_it_can_be_measured(trained):
+    metrics = trained["metrics"]
+    assert 0 < metrics["videos_with_measurable_engagement"] <= metrics["videos_with_history"]
+    assert np.isfinite(trained["calibration"]["engagement_q"])
+    assert np.isfinite(metrics["unseen_channels"]["engagement_r2_history_model"])
+
+
 def test_history_beats_the_cold_start_model_on_real_channels_it_never_saw(trained):
     unseen = trained["metrics"]["unseen_channels"]
     assert unseen["log_views_r2_history_model"] > unseen["log_views_r2_cold_start_model"] + 0.15

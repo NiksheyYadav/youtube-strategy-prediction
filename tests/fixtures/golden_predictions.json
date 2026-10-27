@@ -4,152 +4,152 @@
    [
     "Sunday",
     0,
-    86505.2006408829
+    54951.3146160563
    ],
    [
-    "Saturday",
+    "Monday",
     0,
-    85946.3223495815
+    51627.5526451726
    ],
    [
-    "Friday",
+    "Tuesday",
     0,
-    85090.3873439479
+    51627.5526451726
    ]
   ],
   "category_top3": [
    [
     "Music",
-    867567.5072511518
+    942903.6963937231
    ],
    [
     "Film & Animation",
-    318440.5310266812
+    331438.182072355
    ],
    [
     "Comedy",
-    249094.3191299719
+    215294.8870858946
    ]
   ],
   "percentiles": {
    "category_n": 797,
-   "engagement_category": 33.5006273526,
-   "engagement_overall": 88.3792236463,
-   "views_category": 80.5520702635,
-   "views_overall": 6.2304531796
+   "engagement_category": 37.0044052863,
+   "engagement_overall": 91.9291465378,
+   "views_category": 41.1543287327,
+   "views_overall": 2.7534187772
   },
   "prediction": {
-   "engagement_ci_high": 0.0802057306,
-   "engagement_ci_low": 0.0135283324,
-   "engagement_rate": 0.0468670315,
-   "expected_views": 78139.3236733218,
+   "engagement_ci_high": 0.0974877903,
+   "engagement_ci_low": 0.0203018943,
+   "engagement_rate": 0.0588948423,
+   "expected_views": 46581.8289883669,
    "out_of_range_features": [
     "title_how_to_words"
    ],
-   "views_ci_high": 271545.2309367675,
-   "views_ci_low": 22484.7114116724,
-   "views_log": 11.2662615108,
-   "views_tree_high": 195908.7617739532,
-   "views_tree_low": 36126.8351275365
+   "views_ci_high": 167444.6578343081,
+   "views_ci_low": 12958.1891759096,
+   "views_log": 10.7489872756,
+   "views_tree_high": 85261.363024734,
+   "views_tree_low": 23305.3662168033
   },
   "shapley": {
-   "baseline_views": 234028.1504992937,
+   "baseline_views": 237208.0066231535,
    "effects": {
     "Category": [
-     0.329141048,
-     2.2309772493
+     0.2613674083,
+     3.2508671255
     ],
     "Description": [
-     0.9011877413,
-     -1.2009389717
+     0.828852882,
+     -1.1893442394
     ],
     "Publish timing": [
-     0.9781947854,
-     0.3842284947
+     0.9688195067,
+     0.1691286576
     ],
     "Tags": [
-     0.8730669979,
-     0.0586952869
+     0.8558977778,
+     0.2842475571
     ],
     "Title packaging": [
-     1.318059486,
-     0.7671072253
+     1.0932035373,
+     0.8387905371
     ]
    },
-   "forecast_views": 78139.3236733218
+   "forecast_views": 46581.8289883667
   },
   "top_edits": [
    [
-    "hashtags",
-    0.596205044,
-    0.2576522112
-   ],
-   [
-    "sentence_case",
-    -0.1324083921,
-    -0.4909644833
+    "tag_keywords",
+    5.7289036141,
+    0.7128002852
    ],
    [
     "title_case",
-    -0.7573827443,
-    0.0594190383
-   ],
-   [
-    "tag_keywords",
-    -11.9136322796,
-    0.8796438611
+    4.6372298235,
+    -0.0462294455
    ],
    [
     "question",
-    -11.9889918747,
-    0.1970044626
+    2.1196824053,
+    0.1862611127
+   ],
+   [
+    "hashtags",
+    1.8006984921,
+    0.0135967011
+   ],
+   [
+    "exclaim",
+    -0.098196852,
+    0.0471083542
    ]
   ]
  },
  "long_caps": {
   "best_slots": [
    [
-    "Monday",
+    "Sunday",
     1,
-    329915.7291809241
+    331859.900559899
    ],
    [
-    "Tuesday",
+    "Friday",
     1,
-    328028.8087200031
+    329501.9775797013
    ],
    [
-    "Saturday",
+    "Thursday",
     1,
-    325783.2905900955
+    326468.5033742446
    ]
   ],
   "category_top3": [
    [
     "Film & Animation",
-    871986.7510029472
-   ],
-   [
-    "Sports",
-    388287.8525364219
+    951769.1224671119
    ],
    [
     "Music",
-    378644.491949991
+    462937.0172891613
+   ],
+   [
+    "Sports",
+    361236.3629513344
    ]
   ],
   "percentiles": {
    "category_n": 2505,
-   "engagement_category": 96.0878243513,
-   "engagement_overall": 77.1693137916,
-   "views_category": 89.3013972056,
-   "views_overall": 60.7775801803
+   "engagement_category": 98.7873538328,
+   "engagement_overall": 74.4025764895,
+   "views_category": 79.0818363273,
+   "views_overall": 51.333783038
   },
   "prediction": {
-   "engagement_ci_high": 0.0448557844,
-   "engagement_ci_low": 0.0075658429,
-   "engagement_rate": 0.0262108137,
-   "expected_views": 241351.7532355434,
+   "engagement_ci_high": 0.0518582092,
+   "engagement_ci_low": 0.00606207,
+   "engagement_rate": 0.0289601396,
+   "expected_views": 219665.2269807677,
    "out_of_range_features": [
     "caps_ratio",
     "description_length",
@@ -160,317 +160,319 @@
     "title_lexical_diversity",
     "title_word_count"
    ],
-   "views_ci_high": 838726.3994578974,
-   "views_ci_low": 69450.8284868566,
-   "views_log": 12.3940148487,
-   "views_tree_high": 1172051.7422424203,
-   "views_tree_low": 59175.2675273192
+   "views_ci_high": 832754.5990572945,
+   "views_ci_low": 57943.073063682,
+   "views_log": 12.2998645232,
+   "views_tree_high": 1085192.7900397482,
+   "views_tree_low": 59515.076495104
   },
   "shapley": {
-   "baseline_views": 234028.1504992937,
+   "baseline_views": 237208.0066231535,
    "effects": {
     "Category": [
-     0.8257022863,
-     -0.8025601252
+     0.7708642201,
+     -0.8835593396
     ],
     "Description": [
-     1.1140489745,
-     -0.2839090054
+     1.0235080989,
+     -0.1736062376
     ],
     "Publish timing": [
-     1.0998484925,
-     0.0438798068
+     1.1528251716,
+     0.0362211515
     ],
     "Tags": [
-     0.9891788058,
-     0.40488086
+     0.8570990003,
+     0.3637546778
     ],
     "Title packaging": [
-     1.0304973148,
-     0.8121559639
+     1.1878688802,
+     1.0174091124
     ]
    },
-   "forecast_views": 241351.7532355439
+   "forecast_views": 219665.2269807689
   },
   "top_edits": [
    [
-    "shorten",
-    10.0767172776,
-    0.9619516526
-   ],
-   [
-    "question",
-    9.9721493062,
-    -0.0215567054
+    "hashtags",
+    10.7332344928,
+    -0.0168766955
    ],
    [
     "exclaim",
-    5.2795915038,
-    -0.1105267978
+    4.242393062,
+    -0.142488568
    ],
    [
-    "tag_keywords",
-    0.546435211,
-    0.0837618161
+    "question",
+    3.1959058638,
+    -0.0348809504
    ],
    [
     "cta",
-    -0.3322592556,
-    0.3045543721
+    1.6233804133,
+    0.079479704
+   ],
+   [
+    "shorten",
+    0.3039569177,
+    1.117943698
    ]
   ]
  },
  "music": {
   "best_slots": [
    [
-    "Monday",
-    22,
-    1162038.2456824903
+    "Thursday",
+    2,
+    1843424.3552959065
    ],
    [
     "Wednesday",
-    22,
-    1157481.4246032145
+    2,
+    1843424.3552959065
    ],
    [
     "Tuesday",
-    22,
-    1152479.0039849768
+    2,
+    1833552.021158722
    ]
   ],
   "category_top3": [
    [
     "Music",
-    1044433.912445627
+    1419886.0858964708
    ],
    [
     "Film & Animation",
-    225368.2970358141
+    213356.1869112465
    ],
    [
     "Science & Technology",
-    206250.9177596197
+    180590.2904739961
    ]
   ],
   "percentiles": {
    "category_n": 1213,
-   "engagement_category": 94.2291838417,
-   "engagement_overall": 83.7493101122,
-   "views_category": 78.0708985985,
-   "views_overall": 95.4988655179
+   "engagement_category": 88.4105960265,
+   "engagement_overall": 76.5088566828,
+   "views_category": 91.5086562242,
+   "views_overall": 99.1169436438
   },
   "prediction": {
-   "engagement_ci_high": 0.0619013398,
-   "engagement_ci_low": 0.0104409235,
-   "engagement_rate": 0.0361711316,
-   "expected_views": 1044433.912445627,
+   "engagement_ci_high": 0.0522617102,
+   "engagement_ci_low": 0.0096358252,
+   "engagement_rate": 0.0309487677,
+   "expected_views": 1419886.0858964708,
    "out_of_range_features": [],
-   "views_ci_high": 3629525.3520928076,
-   "views_ci_low": 300546.2837265163,
-   "views_log": 13.8589865435,
-   "views_tree_high": 5737689.229789836,
-   "views_tree_low": 167262.8137624816
+   "views_ci_high": 9348621.12964643,
+   "views_ci_low": 215654.2386797373,
+   "views_log": 14.1660879094,
+   "views_tree_high": 6426180.887042445,
+   "views_tree_low": 207522.1872450961
   },
   "shapley": {
-   "baseline_views": 234028.1504992932,
+   "baseline_views": 237208.0066231535,
    "effects": {
     "Category": [
-     2.7218344401,
-     -0.0057846682
+     3.1865875781,
+     -0.1921726904
     ],
     "Description": [
-     0.8156498734,
-     -0.8704004947
+     0.8904184043,
+     -0.8064407611
     ],
     "Publish timing": [
-     0.9668079225,
-     -0.0476133642
+     0.9303636579,
+     -0.035953112
     ],
     "Tags": [
-     1.0715393765,
-     0.6817294645
+     1.0931817664,
+     0.5367452766
     ],
     "Title packaging": [
-     1.9404283483,
-     1.41254836
+     2.0742329587,
+     1.0569034627
     ]
    },
-   "forecast_views": 1044433.9124456289
+   "forecast_views": 1419886.0858964783
   },
   "top_edits": [
    [
-    "tag_keywords",
-    17.2009035932,
-    0.1961684279
-   ],
-   [
     "question",
-    16.7389102702,
-    -0.0418948482
+    10.3662532087,
+    -0.032171385
    ],
    [
     "exclaim",
-    13.1312585272,
-    -0.0418948482
+    10.3662532087,
+    -0.032171385
+   ],
+   [
+    "tag_keywords",
+    10.0331797792,
+    0.1819192118
    ],
    [
     "hashtags",
-    -2.8376724155,
-    1.5489600736
+    -0.2200603221,
+    1.3125880327
    ],
    [
     "sentence_case",
-    -76.7051007498,
-    -1.3073917503
+    -25.86345814,
+    -0.1349958042
    ]
   ]
  },
  "no_tags_short": {
   "best_slots": [
    [
+    "Monday",
+    0,
+    544929.485149349
+   ],
+   [
+    "Tuesday",
+    0,
+    539326.2275134807
+   ],
+   [
     "Wednesday",
-    1,
-    436888.2221383156
-   ],
-   [
-    "Saturday",
-    1,
-    436361.1151319494
-   ],
-   [
-    "Sunday",
-    1,
-    436361.1151319494
+    0,
+    536658.0606970298
    ]
   ],
   "category_top3": [
    [
     "Music",
-    1045629.7717586771
-   ],
-   [
-    "Film & Animation",
-    373806.7706984804
+    1531383.4650318574
    ],
    [
     "Science & Technology",
-    370612.9758372445
+    522451.8079122229
+   ],
+   [
+    "Film & Animation",
+    493775.6307300274
    ]
   ],
   "percentiles": {
    "category_n": 1114,
-   "engagement_category": 57.0017953321,
-   "engagement_overall": 90.7217759244,
-   "views_category": 59.8743267504,
-   "views_overall": 76.1574783835
+   "engagement_category": 57.4506283662,
+   "engagement_overall": 92.5539452496,
+   "views_category": 73.6086175943,
+   "views_overall": 84.5158520881
   },
   "prediction": {
-   "engagement_ci_high": 0.0925103889,
-   "engagement_ci_low": 0.015603764,
-   "engagement_rate": 0.0540570764,
-   "expected_views": 348996.3909106093,
+   "engagement_ci_high": 0.1109790829,
+   "engagement_ci_low": 0.0115291923,
+   "engagement_rate": 0.0612541376,
+   "expected_views": 415418.308798328,
    "out_of_range_features": [
     "description_length",
     "description_word_count",
     "tag_avg_length",
     "tag_count",
     "tag_total_characters",
-    "title_length"
+    "title_avg_word_length",
+    "title_length",
+    "title_word_count"
    ],
-   "views_ci_high": 1212803.3710791168,
-   "views_ci_low": 100426.7208813482,
-   "views_log": 12.7628197253,
-   "views_tree_high": 2392605.5994820283,
-   "views_tree_low": 84665.7967824494
+   "views_ci_high": 2205938.9450018955,
+   "views_ci_low": 78230.1424721639,
+   "views_log": 12.9370436718,
+   "views_tree_high": 2012288.2245560787,
+   "views_tree_low": 94317.0119153527
   },
   "shapley": {
-   "baseline_views": 234028.1504992937,
+   "baseline_views": 237208.0066231535,
    "effects": {
     "Category": [
-     1.0409075806,
-     1.4697096673
+     1.044403331,
+     1.6557996086
     ],
     "Description": [
-     0.5655016809,
-     -1.1222982609
+     0.6215180543,
+     -1.0646348683
     ],
     "Publish timing": [
-     1.3452895931,
-     -0.2793552105
+     1.3845885401,
+     -0.3842597574
     ],
     "Tags": [
-     1.1613319324,
-     0.1419044478
+     1.1880182041,
+     0.1057777777
     ],
     "Title packaging": [
-     1.6215636569,
-     2.7491131328
+     1.6401730767,
+     3.2769364055
     ]
    },
-   "forecast_views": 348996.3909106086
+   "forecast_views": 415418.3087983288
   },
   "top_edits": [
    [
     "cta",
-    2.4464506462,
-    0.0350707098
-   ],
-   [
-    "exclaim",
-    -11.0592714228,
-    0.1003560725
+    12.3642901725,
+    0.0230620212
    ],
    [
     "question",
-    -11.4932252814,
-    0.1003560725
+    -2.6618743527,
+    0.0301817566
+   ],
+   [
+    "exclaim",
+    -7.0854267753,
+    0.0571635622
    ]
   ]
  },
  "non_ascii": {
   "best_slots": [
    [
-    "Wednesday",
-    9,
-    135228.3550942374
-   ],
-   [
     "Tuesday",
-    9,
-    134197.5184879957
+    10,
+    127800.1195462315
    ],
    [
     "Monday",
+    10,
+    127800.1195462315
+   ],
+   [
+    "Wednesday",
     9,
-    134197.5184879957
+    126088.7362102089
    ]
   ],
   "category_top3": [
    [
-    "Music",
-    250623.2363498872
+    "Comedy",
+    255621.2062142964
    ],
    [
     "Film & Animation",
-    175238.1813408955
+    213592.7588166979
    ],
    [
-    "Sports",
-    155707.0417705377
+    "Music",
+    201196.0440047797
    ]
   ],
   "percentiles": {
    "category_n": 797,
-   "engagement_category": 24.7176913425,
-   "engagement_overall": 84.4422640584,
-   "views_category": 94.3538268507,
-   "views_overall": 18.0045379285
+   "engagement_category": 5.8737151248,
+   "engagement_overall": 75.9033816425,
+   "views_category": 93.2245922208,
+   "views_overall": 11.6698350402
   },
   "prediction": {
-   "engagement_ci_high": 0.0642774898,
-   "engagement_ci_low": 0.0108417097,
-   "engagement_rate": 0.0375595998,
-   "expected_views": 132754.9357312148,
+   "engagement_ci_high": 0.050360074,
+   "engagement_ci_low": 0.0104875174,
+   "engagement_rate": 0.0304237957,
+   "expected_views": 123155.2896975107,
    "out_of_range_features": [
     "description_length",
     "description_word_count",
@@ -478,158 +480,168 @@
     "title_avg_word_length",
     "title_length"
    ],
-   "views_ci_high": 461340.4980593804,
-   "views_ci_low": 38200.9361926163,
-   "views_log": 11.7962676517,
-   "views_tree_high": 308115.9983837207,
-   "views_tree_low": 60857.2242233366
+   "views_ci_high": 442694.0099999775,
+   "views_ci_low": 34260.6730467731,
+   "views_log": 11.7212094757,
+   "views_tree_high": 292118.7587776009,
+   "views_tree_low": 55872.5414597708
   },
   "shapley": {
-   "baseline_views": 234028.1504992937,
+   "baseline_views": 237208.0066231535,
    "effects": {
     "Category": [
-     0.4706383081,
-     2.2596586113
+     0.4322090388,
+     2.2381747914
     ],
     "Description": [
-     0.7748000677,
-     -1.3024482709
+     0.8479230522,
+     -1.0787603352
     ],
     "Publish timing": [
-     1.0376162484,
-     -0.5422037748
+     1.0208361663,
+     -0.2336296769
     ],
     "Tags": [
-     0.9185437387,
-     0.1256552304
+     0.8992680808,
+     0.3395286639
     ],
     "Title packaging": [
-     1.6321890612,
-     0.7686643127
+     1.5432273367,
+     -0.7587284652
     ]
    },
-   "forecast_views": 132754.9357312141
+   "forecast_views": 123155.289697511
   },
   "top_edits": [
    [
     "cta",
-    18.6135154466,
-    -0.1307354439
+    1.867074058,
+    -0.1031681471
+   ],
+   [
+    "tag_keywords",
+    1.1710841166,
+    0.0
+   ],
+   [
+    "hashtags",
+    0.0,
+    -0.031738595
    ],
    [
     "question",
-    -13.3777195079,
-    0.1279685201
+    -4.9278441039,
+    0.0573178893
    ],
    [
     "exclaim",
-    -13.3777195079,
-    -0.0068618712
+    -6.7126667529,
+    0.0573178893
    ]
   ]
  },
  "tech": {
   "best_slots": [
    [
-    "Monday",
-    2,
-    314058.2448859552
-   ],
-   [
-    "Tuesday",
-    2,
-    308000.9519603227
+    "Thursday",
+    0,
+    270356.7893257462
    ],
    [
     "Wednesday",
-    2,
-    306835.5648641703
+    0,
+    270223.4055059672
+   ],
+   [
+    "Friday",
+    1,
+    267751.2499917251
    ]
   ],
   "category_top3": [
    [
     "Music",
-    553620.4637345253
+    589665.9208058757
    ],
    [
     "Film & Animation",
-    405964.0503515824
+    572114.6317428624
    ],
    [
-    "Comedy",
-    290479.0683649161
+    "Sports",
+    247163.0532953758
    ]
   ],
   "percentiles": {
    "category_n": 300,
-   "engagement_category": 3.0,
-   "engagement_overall": 73.1465015024,
-   "views_category": 61.6666666667,
-   "views_overall": 69.0071748329
+   "engagement_category": 1.0135135135,
+   "engagement_overall": 67.1304347826,
+   "views_category": 31.0,
+   "views_overall": 60.8021095235
   },
   "prediction": {
-   "engagement_ci_high": 0.039513814,
-   "engagement_ci_low": 0.0066648107,
-   "engagement_rate": 0.0230893124,
-   "expected_views": 282977.287132673,
+   "engagement_ci_high": 0.0446290273,
+   "engagement_ci_low": 0.0023772417,
+   "engagement_rate": 0.0235031345,
+   "expected_views": 246535.1852741573,
    "out_of_range_features": [],
-   "views_ci_high": 983379.7142784407,
-   "views_ci_low": 81429.019753131,
-   "views_log": 12.5531254498,
-   "views_tree_high": 599808.716170262,
-   "views_tree_low": 152835.4949189778
+   "views_ci_high": 887286.3004412649,
+   "views_ci_low": 68500.0262395354,
+   "views_log": 12.4152640579,
+   "views_tree_high": 509156.7626963786,
+   "views_tree_low": 121911.0928197734
   },
   "shapley": {
-   "baseline_views": 234028.1504992937,
+   "baseline_views": 237208.0066231535,
    "effects": {
     "Category": [
-     1.0537413363,
-     2.1591461423
+     1.0433996532,
+     2.1652254711
     ],
     "Description": [
-     0.9841634951,
-     -2.9224103169
+     0.9057520634,
+     -2.8800884747
     ],
     "Publish timing": [
-     1.0108647988,
-     -0.0007133893
+     1.0323252698,
+     -0.0257751566
     ],
     "Tags": [
-     0.9272761123,
-     0.2942215738
+     0.8868164625,
+     0.3863993999
     ],
     "Title packaging": [
-     1.2438836028,
-     0.3320533598
+     1.2012659632,
+     0.1687576182
     ]
    },
-   "forecast_views": 282977.287132673
+   "forecast_views": 246535.1852741578
   },
   "top_edits": [
    [
-    "exclaim",
-    6.9528611791,
-    -0.0654903785
-   ],
-   [
-    "question",
-    0.9841554645,
-    -0.0612256877
+    "cta",
+    9.0353739967,
+    0.1013136492
    ],
    [
     "tag_keywords",
-    -2.039833859,
-    -0.72462004
+    3.5655101214,
+    -0.3186793809
    ],
    [
-    "cta",
-    -3.8172445489,
-    0.0805778598
+    "question",
+    -0.6402363781,
+    -0.0017646698
+   ],
+   [
+    "exclaim",
+    -2.895428791,
+    -0.0017646698
    ],
    [
     "sentence_case",
-    -28.569463391,
-    -0.2406381562
+    -12.8999048625,
+    -0.1663030062
    ]
   ]
  },
@@ -638,100 +650,101 @@
    [
     "Monday",
     1,
-    226681.9226269225
-   ],
-   [
-    "Tuesday",
-    1,
-    225877.8252384418
+    328015.4683256608
    ],
    [
     "Wednesday",
     1,
-    223997.9490037291
+    327551.7302049517
+   ],
+   [
+    "Tuesday",
+    1,
+    326065.8221510565
    ]
   ],
   "category_top3": [
    [
     "Music",
-    703982.206452808
+    1588446.7342995515
    ],
    [
     "Film & Animation",
-    443016.589008186
+    398139.5857423009
    ],
    [
-    "Sports",
-    231251.0424005719
+    "Comedy",
+    186672.9983956227
    ]
   ],
   "percentiles": {
    "category_n": 7548,
-   "engagement_category": 77.3714891362,
-   "engagement_overall": 64.181026553,
-   "views_category": 39.7456279809,
-   "views_overall": 41.7244128288
+   "engagement_category": 62.0457973399,
+   "engagement_overall": 47.961352657,
+   "views_category": 29.3190249073,
+   "views_overall": 30.1772245048
   },
   "prediction": {
-   "engagement_ci_high": 0.0296438188,
-   "engagement_ci_low": 0.0050000347,
-   "engagement_rate": 0.0173219267,
-   "expected_views": 187477.8495141635,
+   "engagement_ci_high": 0.0235500625,
+   "engagement_ci_low": 0.0030357999,
+   "engagement_rate": 0.0132929312,
+   "expected_views": 170219.5492830184,
    "out_of_range_features": [
-    "description_length"
+    "description_length",
+    "description_word_count"
    ],
-   "views_ci_high": 651508.6504944944,
-   "views_ci_low": 53948.0381891916,
-   "views_log": 12.1414213154,
-   "views_tree_high": 499357.3265733985,
-   "views_tree_low": 65586.4102221224
+   "views_ci_high": 724234.1167149163,
+   "views_ci_low": 40006.7747260329,
+   "views_log": 12.0448502239,
+   "views_tree_high": 351995.1211952397,
+   "views_tree_low": 70627.7063474684
   },
   "shapley": {
-   "baseline_views": 234028.1504992932,
+   "baseline_views": 237208.0066231535,
    "effects": {
     "Category": [
-     0.9969454765,
-     -0.4886832242
+     0.9847048627,
+     -0.577440611
     ],
     "Description": [
-     0.7406641159,
-     -1.2637421974
+     0.6938108601,
+     -1.5313739352
     ],
     "Publish timing": [
-     1.0126416822,
-     -0.1116989175
+     0.9807939434,
+     -0.1904839637
     ],
     "Tags": [
-     0.8907560306,
-     0.3519197319
+     0.8785983801,
+     0.2879884082
     ],
     "Title packaging": [
-     1.2027491016,
-     0.7977634131
+     1.2188926639,
+     0.8048086256
     ]
    },
-   "forecast_views": 187477.8495141625
+   "forecast_views": 170219.5492830181
   },
   "top_edits": [
    [
+    "question",
+    14.8048525714,
+    0.0331588955
+   ],
+   [
     "exclaim",
-    7.5305034896,
-    -0.021739863
+    11.4834656712,
+    0.0331588955
    ],
    [
     "tag_keywords",
-    3.8204572646,
-    0.1245642225
-   ],
-   [
-    "question",
-    -1.0633382335,
-    -0.0182042541
+    9.0275772652,
+    0.1343241421
    ],
    [
     "sentence_case",
-    -26.566723046,
-    -0.6976356669
+    -5.6813951092,
+    -0.019185227
    ]
   ]
  }

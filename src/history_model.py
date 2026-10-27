@@ -25,8 +25,9 @@ import pandas as pd
 from sklearn.metrics import mean_absolute_error, r2_score
 from sklearn.model_selection import GroupKFold
 
-from src.advanced_model import CATEGORY_COLUMN, CLEAN_PATH, build_feature_table, make_model, model_columns
+from src.advanced_model import CATEGORY_COLUMN, CLEAN_PATH, build_feature_table, engagement_rates, make_model, model_columns
 from src.history_features import HISTORY_COLUMNS, MIN_USABLE_VIDEOS, MISSING_FILL, add_history_features
+from src.inference import feature_mismatch
 from src.insights_artifacts import (
     conformal_quantile,
     empirical_coverage,
@@ -62,13 +63,12 @@ def lift_features(history: pd.DataFrame) -> pd.DataFrame:
 
 def training_history(data: pd.DataFrame) -> pd.DataFrame:
     """History features for the Kaggle trending rows: a video's views are known one day after its last trending day."""
-    engagement = (data["likes"].astype(float) + data["comment_count"].astype(float)) / data["views"].astype(float)
     frame = pd.DataFrame({
         "channel_title": data["channel_title"].to_numpy(),
         "publish_time": pd.to_datetime(data["publish_time"], utc=True),
         "known_at": (pd.to_datetime(data["trending_date"]) + pd.Timedelta(days=1)).dt.tz_localize("UTC"),
         "views": data["views"].astype(float).to_numpy(),
-        "engagement": engagement.to_numpy(),
+        "engagement": engagement_rates(data),  # NaN where ratings or comments were switched off
     })
     return add_history_features(frame)
 
@@ -104,6 +104,10 @@ def train_history_models(
     lift = log_views - baseline
     channels = data["channel_title"].to_numpy()
 
+    # Engagement can only be learned from, and judged on, videos where it can be measured (ratings and comments on).
+    measurable = np.isfinite(engagement)
+    usable_eng = usable[measurable[usable]]
+
     # 1) channels the model has never seen: out-of-fold predictions (also for today's cold-start model, to compare)
     oof_lift = np.full(len(data), np.nan)
     oof_eng = np.full(len(data), np.nan)
@@ -111,51 +115,56 @@ def train_history_models(
     cold_eng = np.full(len(data), np.nan)
     for train_rows, test_rows in GroupKFold(n_splits=n_folds).split(usable, groups=channels[usable]):
         tr, te = usable[train_rows], usable[test_rows]
+        tr_eng = tr[measurable[tr]]
         oof_lift[te] = _fit(X_views, lift, tr, n_estimators).predict(X_views.iloc[te])
-        oof_eng[te] = np.maximum(_fit(X_engagement, engagement, tr, n_estimators).predict(X_engagement.iloc[te]), 0.0)
+        oof_eng[te] = np.maximum(_fit(X_engagement, engagement, tr_eng, n_estimators).predict(X_engagement.iloc[te]), 0.0)
         oof_cold[te] = _fit(X_content, log_views, tr, n_estimators).predict(X_content.iloc[te])
-        cold_eng[te] = np.maximum(_fit(X_content, engagement, tr, n_estimators).predict(X_content.iloc[te]), 0.0)
+        cold_eng[te] = np.maximum(_fit(X_content, engagement, tr_eng, n_estimators).predict(X_content.iloc[te]), 0.0)
     pred_log = baseline + oof_lift
 
     q_views = conformal_quantile(views_scores(log_views[usable], pred_log[usable]))
-    q_engagement = conformal_quantile(engagement_scores(engagement[usable], oof_eng[usable]))
+    q_engagement = conformal_quantile(engagement_scores(engagement[usable_eng], oof_eng[usable_eng]))
 
     # 2) the same models tested on LATER videos (train on the earliest 80% by publish time)
-    order = usable[np.argsort(pd.to_datetime(data["publish_time"], utc=True).to_numpy()[usable], kind="stable")]
+    published = pd.to_datetime(data["publish_time"], utc=True).to_numpy()
+    order = usable[np.argsort(published[usable], kind="stable")]
     cut = int(len(order) * 0.8)
     early, late = order[:cut], order[cut:]
     late_lift = _fit(X_views, lift, early, n_estimators).predict(X_views.iloc[late])
-    late_eng = np.maximum(_fit(X_engagement, engagement, early, n_estimators).predict(X_engagement.iloc[late]), 0.0)
     late_pred = baseline[late] + late_lift
+    late_eng_rows = late[measurable[late]]
+    early_eng = early[measurable[early]]
+    late_eng = np.maximum(_fit(X_engagement, engagement, early_eng, n_estimators).predict(X_engagement.iloc[late_eng_rows]), 0.0)
     scale = np.maximum(late_eng, 0.004)
 
     metrics = {
         "videos_total": int(len(data)),
         "videos_with_history": int(len(usable)),
+        "videos_with_measurable_engagement": int(len(usable_eng)),
         "min_usable_videos": MIN_USABLE_VIDEOS,
         "unseen_channels": {
             "log_views_r2_history_model": float(r2_score(log_views[usable], pred_log[usable])),
             "log_views_r2_cold_start_model": float(r2_score(log_views[usable], oof_cold[usable])),
             "log_views_mae_history_model": float(mean_absolute_error(log_views[usable], pred_log[usable])),
             "log_views_mae_cold_start_model": float(mean_absolute_error(log_views[usable], oof_cold[usable])),
-            "engagement_r2_history_model": float(r2_score(engagement[usable], oof_eng[usable])),
-            "engagement_r2_cold_start_model": float(r2_score(engagement[usable], cold_eng[usable])),
+            "engagement_r2_history_model": float(r2_score(engagement[usable_eng], oof_eng[usable_eng])),
+            "engagement_r2_cold_start_model": float(r2_score(engagement[usable_eng], cold_eng[usable_eng])),
         },
         "later_videos": {
             "log_views_r2_history_model": float(r2_score(log_views[late], late_pred)),
-            "engagement_r2_history_model": float(r2_score(engagement[late], late_eng)),
+            "engagement_r2_history_model": float(r2_score(engagement[late_eng_rows], late_eng)),
         },
         "interval_coverage_80": {
             "views_unseen_channels": empirical_coverage(log_views[usable], pred_log[usable] - q_views, pred_log[usable] + q_views),
             "views_later_videos": empirical_coverage(log_views[late], late_pred - q_views, late_pred + q_views),
-            "engagement_later_videos": empirical_coverage(engagement[late], late_eng - q_engagement * scale, late_eng + q_engagement * scale),
+            "engagement_later_videos": empirical_coverage(engagement[late_eng_rows], late_eng - q_engagement * scale, late_eng + q_engagement * scale),
         },
     }
     return {
         "version": 2,
         "models": {
             "views_lift": _fit(X_views, lift, usable, n_estimators),
-            "engagement": _fit(X_engagement, engagement, usable, n_estimators),
+            "engagement": _fit(X_engagement, engagement, usable_eng, n_estimators),
         },
         "content_columns": content_columns,
         "lift_columns": list(lift_features(history.iloc[:1]).columns),
@@ -201,7 +210,12 @@ def load_history_models(path: Path = HISTORY_MODELS_PATH) -> dict[str, object] |
         models = joblib.load(path)
     except (OSError, EOFError, ValueError):
         return None
-    return models if isinstance(models, dict) and models.get("version") == 2 else None
+    if not isinstance(models, dict) or models.get("version") != 2:
+        return None
+    # A history model trained with another feature set would silently ignore (or choke on) the draft's features.
+    if feature_mismatch(models.get("content_columns", [])):
+        return None
+    return models
 
 
 def predict_with_history(

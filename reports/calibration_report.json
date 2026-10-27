@@ -1,13 +1,97 @@
 {
   "coverage_target": 0.8,
-  "views_log_q": 1.245626172729926,
-  "engagement_q": 0.7113465065225083,
-  "views_multiplier_low": 0.28776066382419274,
-  "views_multiplier_high": 3.47511013739859,
+  "views_log_q": 1.5174693699443438,
+  "engagement_q": 0.7892282064969951,
+  "views_log_q_by_category": {
+    "Comedy": 1.6696205831780375,
+    "Education": 1.2794268712031869,
+    "Entertainment": 1.4480211415664819,
+    "Film & Animation": 1.8253750577169932,
+    "Howto & Style": 1.7116530569508015,
+    "Music": 1.8846516151507586,
+    "News & Politics": 1.3326309563990506,
+    "People & Blogs": 1.7600267229917712,
+    "Science & Technology": 1.2806600521982627,
+    "Shows": 1.4488413626140026,
+    "Sports": 1.68527929425262
+  },
+  "engagement_q_by_category": {
+    "Comedy": 0.8117810037628025,
+    "Education": 0.6552857001728437,
+    "Entertainment": 0.7716229904500083,
+    "Film & Animation": 0.8645595201472529,
+    "Howto & Style": 0.8291674584134407,
+    "Music": 0.688652378496781,
+    "News & Politics": 0.7906753885078192,
+    "People & Blogs": 0.8853633458685857,
+    "Science & Technology": 0.8988542714808151,
+    "Shows": 0.5979610802827982,
+    "Sports": 0.798417584737529
+  },
+  "views_multiplier_low": 0.21926606674313154,
+  "views_multiplier_high": 4.560669212767391,
   "coverage_check": {
     "views_out_of_fold": 0.800085852701294,
-    "engagement_out_of_fold": 0.800085852701294,
-    "views_chronological_holdout": 0.7967504598405886,
-    "engagement_chronological_holdout": 0.8087063151440834
-  }
+    "engagement_out_of_fold": 0.8000644122383253,
+    "views_chronological_holdout": 0.8592887798896383,
+    "engagement_chronological_holdout": 0.8772946859903382,
+    "views_later_videos_by_category": {
+      "Comedy": {
+        "n_later_videos": 262,
+        "global_width_coverage": 0.8473282442748091,
+        "category_width_coverage": 0.8816793893129771
+      },
+      "Education": {
+        "n_later_videos": 170,
+        "global_width_coverage": 0.9411764705882353,
+        "category_width_coverage": 0.9411764705882353
+      },
+      "Entertainment": {
+        "n_later_videos": 1604,
+        "global_width_coverage": 0.8672069825436409,
+        "category_width_coverage": 0.8534912718204489
+      },
+      "Film & Animation": {
+        "n_later_videos": 101,
+        "global_width_coverage": 0.693069306930693,
+        "category_width_coverage": 0.7821782178217822
+      },
+      "Howto & Style": {
+        "n_later_videos": 98,
+        "global_width_coverage": 0.8775510204081632,
+        "category_width_coverage": 0.9285714285714286
+      },
+      "Music": {
+        "n_later_videos": 289,
+        "global_width_coverage": 0.7508650519031141,
+        "category_width_coverage": 0.8581314878892734
+      },
+      "News & Politics": {
+        "n_later_videos": 377,
+        "global_width_coverage": 0.9098143236074271,
+        "category_width_coverage": 0.8488063660477454
+      },
+      "People & Blogs": {
+        "n_later_videos": 175,
+        "global_width_coverage": 0.8685714285714285,
+        "category_width_coverage": 0.9085714285714286
+      },
+      "Science & Technology": {
+        "n_later_videos": 70,
+        "global_width_coverage": 0.8857142857142857,
+        "category_width_coverage": 0.8285714285714286
+      },
+      "Shows": {
+        "n_later_videos": 39,
+        "global_width_coverage": 0.9743589743589743,
+        "category_width_coverage": 0.9743589743589743
+      },
+      "Sports": {
+        "n_later_videos": 54,
+        "global_width_coverage": 0.8148148148148148,
+        "category_width_coverage": 0.8333333333333334
+      }
+    }
+  },
+  "calibrated_on": "out-of-fold predictions for channels never seen in training"
 }

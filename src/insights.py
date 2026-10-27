@@ -362,7 +362,13 @@ def load_similarity_index(path: str = str(SIMILARITY_PATH)) -> dict[str, object]
     return joblib.load(path)
 
 
-def _weighted_median(values: np.ndarray, weights: np.ndarray) -> float:
+def _weighted_median(values: np.ndarray, weights: np.ndarray) -> float | None:
+    """Median that ignores values that are not numbers (a video with ratings switched off has no engagement rate)."""
+    values, weights = np.asarray(values, dtype=float), np.asarray(weights, dtype=float)
+    known = np.isfinite(values)
+    if not known.any():
+        return None
+    values, weights = values[known], weights[known]
     order = np.argsort(values)
     values, weights = values[order], weights[order]
     cumulative = np.cumsum(weights)

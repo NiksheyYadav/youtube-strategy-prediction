@@ -11,11 +11,13 @@ import altair as alt
 import pandas as pd
 import streamlit as st
 
+from src.advanced_model import non_latin_share
 from src.channel_history import HistoryError, parse_upload, summarise
-from src.history_model import load_history_models
-from src.inference import global_feature_groups, load_bundle, predict_video
+from src.history_model import HISTORY_MODELS_PATH, load_history_models
+from src.inference import BUNDLE_PATH, global_feature_groups, headline_accuracy, load_bundle, predict_video
 from src.insights import (
     DAYS,
+    SIMILARITY_PATH,
     Draft,
     build_brief_markdown,
     category_what_if,
@@ -125,16 +127,35 @@ def apply_style() -> None:
 
 
 # --------------------------------------------------------------------------- #
-# Cached model access (the leading underscore tells Streamlit not to hash the bundle)
+# Cached model access (the leading underscore tells Streamlit not to hash the bundle).
+# Every cache is keyed on the model files' modification time, so retraining takes effect without restarting the app
+# (before this, a running app kept the old model in memory while the code expected the new one).
 # --------------------------------------------------------------------------- #
+def file_stamp(path: Path) -> int:
+    try:
+        return path.stat().st_mtime_ns
+    except OSError:
+        return 0
+
+
 @st.cache_resource(show_spinner="Loading the explainable model…")
+def _load_bundle_cached(stamp: int) -> dict[str, object]:
+    bundle = load_bundle()
+    bundle["file_stamp"] = stamp
+    return bundle
+
+
 def get_bundle() -> dict[str, object]:
-    return load_bundle()
+    return _load_bundle_cached(file_stamp(BUNDLE_PATH))
 
 
 @st.cache_resource(show_spinner=False)
-def get_similarity_index() -> dict[str, object]:
+def _load_similarity_cached(stamp: int) -> dict[str, object]:
     return load_similarity_index()
+
+
+def get_similarity_index() -> dict[str, object]:
+    return _load_similarity_cached(file_stamp(SIMILARITY_PATH))
 
 
 @st.cache_resource(show_spinner=False)
@@ -144,29 +165,49 @@ def get_pending_logins() -> PendingLogins:
 
 
 @st.cache_resource(show_spinner=False)
-def get_history_models() -> dict[str, object] | None:
-    """The models that use a creator's own history; None if the file is missing (the app then forecasts without history)."""
+def _load_history_cached(stamp: int) -> dict[str, object] | None:
     return load_history_models()
 
 
+def get_history_models() -> dict[str, object] | None:
+    """The models that use a creator's own history; None if the file is missing or out of date (the app then forecasts without history)."""
+    return _load_history_cached(file_stamp(HISTORY_MODELS_PATH))
+
+
 @st.cache_data(show_spinner=False, max_entries=64)
-def cached_explanation(_bundle, draft: Draft):
+def _cached_explanation(_bundle, draft: Draft, stamp: int):
     return explain_groups(_bundle, draft)
 
 
 @st.cache_data(show_spinner=False, max_entries=64)
-def cached_time_grid(_bundle, draft: Draft):
+def _cached_time_grid(_bundle, draft: Draft, stamp: int):
     return time_grid(_bundle, draft)
 
 
 @st.cache_data(show_spinner=False, max_entries=64)
-def cached_suggestions(_bundle, draft: Draft):
+def _cached_suggestions(_bundle, draft: Draft, stamp: int):
     return suggest_edits(_bundle, draft)
 
 
 @st.cache_data(show_spinner=False, max_entries=64)
-def cached_categories(_bundle, draft: Draft):
+def _cached_categories(_bundle, draft: Draft, stamp: int):
     return category_what_if(_bundle, draft)
+
+
+def cached_explanation(bundle, draft: Draft):
+    return _cached_explanation(bundle, draft, bundle.get("file_stamp", 0))
+
+
+def cached_time_grid(bundle, draft: Draft):
+    return _cached_time_grid(bundle, draft, bundle.get("file_stamp", 0))
+
+
+def cached_suggestions(bundle, draft: Draft):
+    return _cached_suggestions(bundle, draft, bundle.get("file_stamp", 0))
+
+
+def cached_categories(bundle, draft: Draft):
+    return _cached_categories(bundle, draft, bundle.get("file_stamp", 0))
 
 
 # --------------------------------------------------------------------------- #
@@ -181,6 +222,8 @@ def compact_number(value: float) -> str:
 
 
 def as_percent(value: float) -> str:
+    if value is None or value != value:  # NaN: ratings or comments were switched off, so there is no engagement rate to show
+        return "n/a"
     return f"{value * 100:.2f}%"
 
 
@@ -346,7 +389,7 @@ def render_personal_panel(bundle: dict[str, object], draft: Draft) -> None:
     result = personal_forecast(bundle, models, draft, channel)
     if result.prediction is None:
         if result.reason == "no_models":
-            st.info("The history model file is missing on this server, so only the trending-video forecast is available.")
+            st.info("The history model file is missing or out of date on this server, so only the trending-video forecast is available.")
         else:
             st.info(f"Only {result.usable_videos} of your videos have views that have settled (the model needs at least 3 videos "
                     "that are 14 days old or older). Add more videos, or wait until recent ones settle.")
@@ -387,8 +430,6 @@ def render_forecast(bundle: dict[str, object], draft: Draft) -> None:
         st.info(str(error))
         return
 
-    calibration = bundle["calibration"]
-    holdout_cover = calibration["coverage_check"]["views_chronological_holdout"]
     percentiles = forecast_percentile(bundle, draft.category_name, result.views_log, result.engagement_rate)
 
     kicker("MODEL OUTPUT")
@@ -397,7 +438,7 @@ def render_forecast(bundle: dict[str, object], draft: Draft) -> None:
         st.metric("Expected views", compact_number(result.expected_views))
         st.caption(
             f"80% interval: {compact_number(result.views_ci_low)} to {compact_number(result.views_ci_high)} "
-            f"(held {holdout_cover:.0%} of the time on later uploads)"
+            f"(checked on channels the model had not seen; width set from {result.interval_basis})"
         )
     with second:
         st.metric("Expected engagement", as_percent(result.engagement_rate))
@@ -414,6 +455,18 @@ def render_forecast(bundle: dict[str, object], draft: Draft) -> None:
             f"<b>{ordinal(percentiles['engagement_overall'])}</b> percentile.</div>",
             unsafe_allow_html=True,
         )
+
+    st.caption("These numbers compare your draft with other videos that reached India's Trending list, so they are higher than what an "
+               "ordinary upload gets. Use them to compare drafts with each other, not as a promise of views.")
+    if len(draft.title.split()) < 3:
+        st.warning("The title has fewer than three words, so the model has very little to read. Short titles give unreliable forecasts.")
+    if result.interval_basis == "all trending videos":
+        st.caption(f"{draft.category_name} has too few trending videos in the data to set its own interval width, so the overall width is used.")
+    script_accuracy = (bundle["metrics"]["views_log"].get("unseen_channel_by_title_script") or {}).get("non_latin_titles")
+    if script_accuracy and non_latin_share(draft.title) >= 0.5:
+        st.warning(f"This title is mostly in a script other than the Latin alphabet (Hindi, Tamil, Telugu and so on). On channels the model "
+                   f"had not seen, its views score for such titles was only R² {script_accuracy['r2']:.2f} (against "
+                   f"{headline_accuracy(bundle)['views_r2']:.2f} overall), so the forecast is rough. Category and timing are the parts to trust.")
 
     render_real_outcome(draft)
     render_personal_panel(bundle, draft)
@@ -692,13 +745,22 @@ def render_method(bundle: dict[str, object]) -> None:
     left, right = st.columns(2)
     with left:
         st.markdown("#### Validation at a glance")
-        a, b = st.columns(2)
-        a.metric("Views R² · 5-fold CV", f"{metrics['views_log']['five_fold_cv']['r2_mean']:.3f}")
-        b.metric("Views R² · later uploads", f"{metrics['views_log']['chronological_holdout']['r2']:.3f}")
-        c, d = st.columns(2)
-        c.metric("Engagement R² · 5-fold CV", f"{metrics['engagement_rate']['five_fold_cv']['r2_mean']:.3f}")
-        d.metric("Engagement R² · later uploads", f"{metrics['engagement_rate']['chronological_holdout']['r2']:.3f}")
-        st.caption("The chronological holdout trains on earlier uploads and tests on later ones, which is harder and more realistic.")
+        views_metrics, engagement_metrics = metrics["views_log"], metrics["engagement_rate"]
+        rows, notes = [], []
+        if "unseen_channel_cv" in views_metrics:
+            rows.append(("Channels never seen in training (the honest test)", views_metrics["unseen_channel_cv"]["r2_mean"],
+                         engagement_metrics["unseen_channel_cv"]["r2_mean"]))
+            notes.append("A new creator is a channel the model has never seen, so that row is the one to trust.")
+        rows.append(("Later uploads (trained on earlier ones)", views_metrics["chronological_holdout"]["r2"], engagement_metrics["chronological_holdout"]["r2"]))
+        rows.append(("Shuffled 5-fold (same channels on both sides)", views_metrics["five_fold_cv"]["r2_mean"], engagement_metrics["five_fold_cv"]["r2_mean"]))
+        table = pd.DataFrame(rows, columns=["Test", "Views R²", "Engagement R²"])
+        st.dataframe(table.style.format({"Views R²": "{:.2f}", "Engagement R²": "{:.2f}"}), hide_index=True, width="stretch")
+        st.caption(" ".join(notes + ["The shuffled test reads highest because it lets the model see the same channel while learning and while being tested."]))
+        by_script = views_metrics.get("unseen_channel_by_title_script") or {}
+        if "latin_titles" in by_script and "non_latin_titles" in by_script:
+            st.caption(f"On unseen channels, views R² is {by_script['latin_titles']['r2']:.2f} for titles in the Latin alphabet and "
+                       f"{by_script['non_latin_titles']['r2']:.2f} for titles in Hindi, Tamil, Telugu and other scripts "
+                       f"({by_script['non_latin_titles']['n']:,} videos).")
     with right:
         st.markdown("#### What each strategy group contributes (global importance)")
         groups = global_feature_groups(bundle)
@@ -706,7 +768,7 @@ def render_method(bundle: dict[str, object]) -> None:
 
     st.markdown("#### Honest uncertainty: do the 80% intervals really hold?")
     coverage = pd.DataFrame({
-        "Check": ["Out-of-fold (shuffled)", "Later-in-time holdout"],
+        "Check": ["Out-of-fold, channels never seen in training", "Later-in-time holdout (some channels already seen)"],
         "Views intervals": [f"{check['views_out_of_fold']:.1%}", f"{check['views_chronological_holdout']:.1%}"],
         "Engagement intervals": [f"{check['engagement_out_of_fold']:.1%}", f"{check['engagement_chronological_holdout']:.1%}"],
         "Target": ["80%", "80%"],
@@ -722,7 +784,7 @@ def render_method(bundle: dict[str, object]) -> None:
             "**Data** → India trending snapshots, de-duplicated to one row per video (16,307).  \n"
             "**Features** → only things known before upload: title style, tags, description, category, IST publish time.  \n"
             "**Models** → two Random Forests (log-views and engagement rate).  \n"
-            "**Evaluation** → 5-fold CV plus a chronological holdout.  \n"
+            "**Evaluation** → three tests: channels the model never saw (the honest one), a later-in-time holdout, and shuffled 5-fold CV.  \n"
             "**Explanation** → exact Shapley values over five feature groups.  \n"
             "**Uncertainty** → split-conformal intervals, with coverage measured on later uploads.  \n"
             "**Second opinion** → TF-IDF nearest-neighbour look-alike videos.  \n"
@@ -1049,8 +1111,10 @@ def main() -> None:
         st.button("Load this video", on_click=load_example, args=(categories,), width="stretch", disabled=not EXAMPLES)
         st.markdown("### About this demo")
         st.write(f"**{bundle['training_rows']:,}** unique India-trending videos")
-        st.write(f"Views R² **{metrics['views_log']['five_fold_cv']['r2_mean']:.2f}** · engagement R² "
-                 f"**{metrics['engagement_rate']['five_fold_cv']['r2_mean']:.2f}** (5-fold CV)")
+        accuracy = headline_accuracy(bundle)
+        st.write(f"Views R² **{accuracy['views_r2']:.2f}** · engagement R² **{accuracy['engagement_r2']:.2f}**")
+        st.caption(f"Measured on {accuracy['basis']}. R² is the share of the spread in the results that the model explains; "
+                   "1.0 would be perfect and 0 means no better than guessing the average.")
         st.info("The trending-video forecast uses no likes, comments, views, channel information or thumbnail data as inputs. "
                 "If you add your own earlier videos (My channel tab), their view counts are used to personalise it.")
         if st.session_state.get("channel") is not None:

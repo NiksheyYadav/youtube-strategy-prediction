@@ -237,3 +237,29 @@ def test_draft_b_follows_draft_a_until_the_user_edits_it(app):
 def test_the_sidebar_is_configured_to_start_closed_on_small_screens():
     source = APP_PATH.read_text(encoding="utf-8")
     assert 'initial_sidebar_state="auto"' in source and 'initial_sidebar_state="expanded"' not in source
+
+
+def test_a_model_file_that_does_not_match_the_code_gives_a_plain_message_not_a_stack_trace(tmp_path, monkeypatch):
+    """The failure a user hit after the code gained a feature while the saved model still lacked it: a raw ValueError page."""
+    import joblib
+    import streamlit as st
+
+    from src import inference
+
+    saved = joblib.load(inference.BUNDLE_PATH)
+    saved["input_columns"] = [name for name in saved["input_columns"] if name != "title_non_latin_share"]
+    old_model = tmp_path / "old_model.joblib"
+    joblib.dump(saved, old_model)
+
+    real_load = inference.load_bundle
+    monkeypatch.setattr(inference, "load_bundle", lambda: real_load(old_model))
+    st.cache_resource.clear()
+    try:
+        broken = AppTest.from_file(str(APP_PATH), default_timeout=180).run()
+        assert not broken.exception, "a mismatched model must be explained, not crash the page"
+        shown = " ".join(error.value for error in broken.error)
+        assert "different set of features" in shown and "advanced_model.py --train" in " ".join(code.value for code in broken.code)
+        assert not broken.tabs, "nothing is forecast from a model that does not match the code"
+    finally:
+        monkeypatch.undo()
+        st.cache_resource.clear()

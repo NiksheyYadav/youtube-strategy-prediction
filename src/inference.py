@@ -33,6 +33,47 @@ class Prediction:
     views_ci_high: float | None = None
     engagement_ci_low: float | None = None
     engagement_ci_high: float | None = None
+    interval_basis: str = "all trending videos"  # or the category name when that category has its own calibrated width
+
+
+def interval_widths(calibration: dict[str, object], category_name: str) -> tuple[float, float, str]:
+    """Interval width for views and engagement: the category's own when it has enough videos, else the overall width.
+
+    One overall width is right on average but wrong for some categories (it used to cover only half of the Gaming videos).
+    """
+    views_by_category = calibration.get("views_log_q_by_category") or {}
+    engagement_by_category = calibration.get("engagement_q_by_category") or {}
+    own = category_name in views_by_category
+    return (
+        float(views_by_category.get(category_name, calibration["views_log_q"])),
+        float(engagement_by_category.get(category_name, calibration["engagement_q"])),
+        category_name if own else "all trending videos",
+    )
+
+
+def headline_accuracy(bundle: dict[str, object]) -> dict[str, object]:
+    """The accuracy numbers to show people, read from the trained bundle (never typed into the app by hand).
+
+    The headline is the test on channels the model had never seen, because that is what a first-time user gets; the shuffled
+    cross-validation puts the same channel on both sides of the split and reads higher.  A bundle trained before the
+    unseen-channel test existed falls back to the shuffled number and says so.
+    """
+    views, engagement = bundle["metrics"]["views_log"], bundle["metrics"]["engagement_rate"]
+    if "unseen_channel_cv" in views and "unseen_channel_cv" in engagement:
+        return {
+            "views_r2": views["unseen_channel_cv"]["r2_mean"],
+            "engagement_r2": engagement["unseen_channel_cv"]["r2_mean"],
+            "basis": "channels the model had never seen",
+            "shuffled_views_r2": views["five_fold_cv"]["r2_mean"],
+            "shuffled_engagement_r2": engagement["five_fold_cv"]["r2_mean"],
+        }
+    return {
+        "views_r2": views["five_fold_cv"]["r2_mean"],
+        "engagement_r2": engagement["five_fold_cv"]["r2_mean"],
+        "basis": "shuffled 5-fold cross-validation (optimistic: the same channel is in both halves)",
+        "shuffled_views_r2": views["five_fold_cv"]["r2_mean"],
+        "shuffled_engagement_r2": engagement["five_fold_cv"]["r2_mean"],
+    }
 
 
 def load_bundle(path: Path = BUNDLE_PATH) -> dict[str, object]:
@@ -45,7 +86,29 @@ def load_bundle(path: Path = BUNDLE_PATH) -> dict[str, object]:
     missing = required.difference(bundle)
     if missing:
         raise ValueError(f"Model bundle is missing required fields: {sorted(missing)}")
+    wrong = feature_mismatch(bundle["input_columns"])
+    if wrong:
+        raise ValueError(
+            "The saved model was trained with a different set of features than this version of the app uses "
+            f"({wrong}). Train it again with: python src/advanced_model.py --train"
+        )
     return bundle
+
+
+def expected_feature_names() -> set[str]:
+    """The model inputs the current code builds for a draft (the same function training uses)."""
+    return set(build_demo_features("A title", "", "", "Education", 0, 0).columns)
+
+
+def feature_mismatch(saved_columns: object) -> str:
+    """Empty when a saved model's inputs match the code; otherwise a short description of the difference."""
+    saved, expected = set(saved_columns), expected_feature_names()
+    parts = []
+    if expected - saved:
+        parts.append("the model lacks " + ", ".join(sorted(expected - saved)))
+    if saved - expected:
+        parts.append("the model expects " + ", ".join(sorted(saved - expected)))
+    return "; ".join(parts)
 
 
 def predict_frame(bundle: dict[str, object], frame: pd.DataFrame) -> tuple[np.ndarray, np.ndarray]:
@@ -124,14 +187,15 @@ def predict_video(
         "views_ci_low": None, "views_ci_high": None,
         "engagement_ci_low": None, "engagement_ci_high": None,
     }
+    basis = "all trending videos"
     if calibration:
-        ci["views_ci_low"], ci["views_ci_high"] = views_interval(view_log, calibration["views_log_q"])
-        ci["engagement_ci_low"], ci["engagement_ci_high"] = engagement_interval(
-            engagement, calibration["engagement_q"]
-        )
+        q_views, q_engagement, basis = interval_widths(calibration, category_name)
+        ci["views_ci_low"], ci["views_ci_high"] = views_interval(view_log, q_views)
+        ci["engagement_ci_low"], ci["engagement_ci_high"] = engagement_interval(engagement, q_engagement)
 
     return Prediction(
         views_log=view_log,
+        interval_basis=basis,
         **ci,
         expected_views=max(0.0, float(np.expm1(view_log))),
         views_low=max(0.0, float(np.expm1(np.quantile(view_trees, 0.15)))),

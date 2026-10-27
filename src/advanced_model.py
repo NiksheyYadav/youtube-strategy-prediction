@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import sys
 import unicodedata
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -22,14 +23,16 @@ from sklearn.base import clone
 from sklearn.compose import ColumnTransformer
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import mean_absolute_error, r2_score
-from sklearn.model_selection import KFold
+from sklearn.model_selection import GroupKFold, KFold
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder
 
-try:
-    from src import insights_artifacts as artifacts
-except ModuleNotFoundError:  # run directly as: python src/advanced_model.py
-    import insights_artifacts as artifacts
+if __package__ in (None, ""):  # run directly as: python src/advanced_model.py
+    # Put the project root on the path so the helpers are imported as ``src.insights_artifacts``.  Importing them by their bare
+    # name would pickle the word splitter inside the saved look-alike index under the wrong module name, and the app could
+    # then not load that file.
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from src import insights_artifacts as artifacts
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -89,7 +92,31 @@ def category_mapping(path: Path = CATEGORY_PATH) -> dict[str, str]:
 
 
 def _tokens(value: str) -> list[str]:
-    return re.findall(r"[A-Za-z0-9']+", str(value).lower())
+    """Words in any script (the old A-Z-only splitter made every Hindi or Tamil title look empty)."""
+    return artifacts.word_tokens(value)
+
+
+def non_latin_share(value: str) -> float:
+    """Share of letters that are not Latin script (about 14% of the training titles are mostly Hindi, Tamil, Telugu...)."""
+    letters = [character for character in str(value) if character.isalpha()]
+    return sum(ord(character) > 0x024F for character in letters) / len(letters) if letters else 0.0
+
+
+def engagement_valid_mask(data: pd.DataFrame) -> np.ndarray:
+    """False where engagement cannot be measured: with ratings or comments switched off, likes (or comments) are stored as 0,
+    so (likes + comments) / views is wrongly close to zero.  Those videos still count for views, just not for engagement."""
+    def switched_on(column: str) -> np.ndarray:
+        if column not in data:
+            return np.zeros(len(data), dtype=bool)
+        return data[column].astype(str).str.strip().str.lower().eq("true").to_numpy()
+
+    return ~(switched_on("ratings_disabled") | switched_on("comments_disabled"))
+
+
+def engagement_rates(data: pd.DataFrame) -> np.ndarray:
+    """(likes + comments) / views, or NaN where it cannot be measured (see ``engagement_valid_mask``)."""
+    rate = ((data["likes"].astype(float) + data["comment_count"].astype(float)) / data["views"].astype(float)).to_numpy()
+    return np.where(engagement_valid_mask(data), rate, np.nan)
 
 
 def normalise_tags(tags: object) -> str:
@@ -153,6 +180,7 @@ def _content_features(
         "has_number_in_title": int(any(character.isdigit() for character in title)),
         "has_question_mark": int("?" in title),
         "caps_ratio": _caps_ratio(title),
+        "title_non_latin_share": non_latin_share(title),
         "tag_count": len(tag_parts),
         "description_length": len(description),
         CATEGORY_COLUMN: category_name or "Unknown",
@@ -214,10 +242,7 @@ def build_feature_table(
     ]
     feature_table = pd.DataFrame(rows)
     feature_table["views"] = data["views"].astype(float).to_numpy()
-    feature_table["engagement_rate"] = (
-        (data["likes"].astype(float) + data["comment_count"].astype(float))
-        / data["views"].astype(float)
-    ).to_numpy()
+    feature_table["engagement_rate"] = engagement_rates(data)
     feature_table["publish_timestamp"] = publish_time.to_numpy()
     return feature_table
 
@@ -246,14 +271,14 @@ def model_columns(feature_table: pd.DataFrame) -> tuple[list[str], list[str]]:
     return numeric, categorical
 
 
-def make_model(numeric_columns: list[str], categorical_columns: list[str]) -> Pipeline:
+def make_model(numeric_columns: list[str], categorical_columns: list[str], n_estimators: int = 180) -> Pipeline:
     preprocessor = ColumnTransformer(
         [("category", OneHotEncoder(handle_unknown="ignore"), categorical_columns)],
         remainder="passthrough",
         verbose_feature_names_out=False,
     )
     forest = RandomForestRegressor(
-        n_estimators=180,
+        n_estimators=n_estimators,
         max_depth=16,
         min_samples_leaf=5,
         max_features=0.8,
@@ -273,11 +298,14 @@ def evaluate_target(
     X: pd.DataFrame,
     y: pd.Series,
     timestamps: pd.Series,
-) -> tuple[dict[str, object], np.ndarray, np.ndarray, np.ndarray]:
-    """Report shuffled CV and an honest later-in-time holdout.
+    groups: np.ndarray | None = None,
+) -> tuple[dict[str, object], np.ndarray, np.ndarray, np.ndarray, np.ndarray | None]:
+    """Report three tests: shuffled CV, an honest later-in-time holdout, and (with ``groups``) channels never seen in training.
 
-    Also returns the out-of-fold predictions and the chronological-holdout
-    predictions, which the calibration step needs.
+    The shuffled CV puts the same channel on both sides of the split, so it flatters the model; the unseen-channel test is the
+    one that matches a creator using the app for the first time, and its out-of-fold errors are what the intervals are
+    calibrated on.  Also returns the out-of-fold predictions, the chronological-holdout predictions and (when ``groups`` is
+    given) the unseen-channel out-of-fold predictions, which the calibration step needs.
     """
     folds = KFold(n_splits=5, shuffle=True, random_state=RANDOM_STATE)
     scores: list[Metrics] = []
@@ -296,7 +324,7 @@ def evaluate_target(
     temporal = _evaluate(temporal_model, X.iloc[holdout_index], y.iloc[holdout_index])
     holdout_prediction = temporal_model.predict(X.iloc[holdout_index])
 
-    metrics = {
+    metrics: dict[str, object] = {
         "five_fold_cv": {
             "r2_mean": float(np.mean([score.r2 for score in scores])),
             "r2_std": float(np.std([score.r2 for score in scores])),
@@ -305,7 +333,69 @@ def evaluate_target(
         },
         "chronological_holdout": asdict(temporal),
     }
-    return metrics, out_of_fold, holdout_index, holdout_prediction
+
+    unseen_out_of_fold = None
+    if groups is not None and len(set(np.asarray(groups).tolist())) >= 2:
+        unseen_out_of_fold = np.full(len(X), np.nan, dtype=float)
+        group_scores: list[Metrics] = []
+        splitter = GroupKFold(n_splits=min(5, len(set(np.asarray(groups).tolist()))))
+        for train_index, validation_index in splitter.split(X, groups=groups):
+            fold_model = clone(template)
+            fold_model.fit(X.iloc[train_index], y.iloc[train_index])
+            unseen_out_of_fold[validation_index] = fold_model.predict(X.iloc[validation_index])
+            group_scores.append(_evaluate(fold_model, X.iloc[validation_index], y.iloc[validation_index]))
+        metrics["unseen_channel_cv"] = {
+            "r2_mean": float(np.mean([score.r2 for score in group_scores])),
+            "r2_std": float(np.std([score.r2 for score in group_scores])),
+            "mae_mean": float(np.mean([score.mae for score in group_scores])),
+            "mae_std": float(np.std([score.mae for score in group_scores])),
+            "r2_pooled": float(r2_score(y, unseen_out_of_fold)),
+        }
+    return metrics, out_of_fold, holdout_index, holdout_prediction, unseen_out_of_fold
+
+
+def evaluate_target_on_rows(
+    template: Pipeline,
+    X: pd.DataFrame,
+    y: pd.Series,
+    timestamps: pd.Series,
+    groups: np.ndarray,
+    rows: np.ndarray,
+) -> tuple[dict[str, object], np.ndarray, np.ndarray, np.ndarray, np.ndarray | None]:
+    """``evaluate_target`` on a subset of rows (for example only the videos whose engagement can be measured).
+
+    The returned arrays are mapped back to the full table: out-of-fold values are NaN for the rows that were left out and the
+    holdout index points at positions in the full table.
+    """
+    sub_X = X.iloc[rows].reset_index(drop=True)
+    sub_y = y.iloc[rows].reset_index(drop=True)
+    sub_time = timestamps.iloc[rows].reset_index(drop=True)
+    metrics, out_of_fold, holdout_index, holdout_prediction, unseen = evaluate_target(
+        template, sub_X, sub_y, sub_time, np.asarray(groups)[rows]
+    )
+
+    def scatter(values: np.ndarray | None) -> np.ndarray | None:
+        if values is None:
+            return None
+        full = np.full(len(X), np.nan, dtype=float)
+        full[rows] = values
+        return full
+
+    return metrics, scatter(out_of_fold), rows[holdout_index], holdout_prediction, scatter(unseen)
+
+
+def segment_accuracy(actual: np.ndarray, predicted: np.ndarray, segments: dict[str, np.ndarray]) -> dict[str, dict[str, float]]:
+    """R2 and MAE per named group of rows, ignoring rows that have no prediction or no measurable target."""
+    out: dict[str, dict[str, float]] = {}
+    for name, mask in segments.items():
+        keep = np.asarray(mask, dtype=bool) & np.isfinite(actual) & np.isfinite(predicted)
+        if keep.sum() >= 30:
+            out[name] = {
+                "n": int(keep.sum()),
+                "r2": float(r2_score(actual[keep], predicted[keep])),
+                "mae": float(mean_absolute_error(actual[keep], predicted[keep])),
+            }
+    return out
 
 
 def feature_group(feature_name: str) -> str:
@@ -363,70 +453,138 @@ def write_importance_reports(bundle: dict[str, object]) -> None:
     plt.close(fig)
 
 
-def write_model_card(metrics: dict[str, object], row_count: int, calibration: dict[str, object]) -> None:
+def write_model_card(
+    metrics: dict[str, object], row_count: int, calibration: dict[str, object], data_quality: dict[str, int] | None = None
+) -> None:
     views = metrics["views_log"]
     engagement = metrics["engagement_rate"]
     check = calibration["coverage_check"]
-    MODEL_CARD_PATH.write_text(
-        "# Advanced Model Card\n\n"
-        "## Purpose\n\n"
+    quality = data_quality or {}
+    unseen_views = views.get("unseen_channel_cv", {})
+    unseen_engagement = engagement.get("unseen_channel_cv", {})
+    script = views.get("unseen_channel_by_title_script", {})
+    lines = [
+        "# Advanced Model Card",
+        "",
+        "## Purpose",
+        "",
         "Estimate relative performance among videos that already reached India’s Trending list. "
-        "The app is a pre-publication decision aid, not a promise of views or a viral/non-viral classifier.\n\n"
-        "## Training data\n\n"
-        f"{row_count:,} unique India-trending video snapshots after de-duplication. "
-        "Every input is available before publishing. Likes, dislikes, comments, views, video ID, "
-        "and channel fields are excluded from model inputs.\n\n"
-        "## Student-explainable additions\n\n"
+        "The app is a pre-publication decision aid, not a promise of views or a viral/non-viral classifier.",
+        "",
+        "## Training data",
+        "",
+        f"{row_count:,} unique India-trending video snapshots after de-duplication"
+        + (f" from {quality['channels']:,} channels" if quality.get("channels") else "")
+        + ". Every input is available before publishing. Likes, dislikes, comments, views, video ID, "
+        "and channel fields are excluded from model inputs.",
+        "",
+    ]
+    if quality.get("engagement_not_measurable"):
+        lines += [
+            f"{quality['engagement_not_measurable']:,} videos had ratings or comments switched off, so their engagement rate cannot be "
+            "measured (YouTube stores 0 likes). They are left out of the engagement model but still count for views.",
+            "",
+        ]
+    lines += [
+        "## Student-explainable additions",
+        "",
         "The advanced version retains the original title, tag, category, description and timing fields, "
         "then adds transparent counts and ratios: punctuation, emoji, digit, urgency and how-to wording in "
         "the title; tag length and multiword-tag ratio; description links, hashtags and call-to-action words; "
-        "and weekend/cyclical time fields. These are descriptive associations, not causal rules.\n\n"
-        "## Validation\n\n"
-        f"- Log views, 5-fold CV R²: {views['five_fold_cv']['r2_mean']:.3f} ± {views['five_fold_cv']['r2_std']:.3f}\n"
-        f"- Engagement rate, 5-fold CV R²: {engagement['five_fold_cv']['r2_mean']:.3f} ± {engagement['five_fold_cv']['r2_std']:.3f}\n"
-        f"- Log views, chronological holdout R²: {views['chronological_holdout']['r2']:.3f}\n"
-        f"- Engagement rate, chronological holdout R²: {engagement['chronological_holdout']['r2']:.3f}\n\n"
-        "## Honest uncertainty (split-conformal intervals)\n\n"
-        f"Intervals are calibrated on out-of-fold errors so that about {calibration['coverage_target']:.0%} of true values fall inside. "
+        "weekend/cyclical time fields; and the share of the title written in a non-Latin script (Hindi, Tamil, Telugu and so on). "
+        "These are descriptive associations, not causal rules.",
+        "",
+        "## Validation (three tests, from easiest to most honest)",
+        "",
+        f"- Shuffled 5-fold CV, log views R²: {views['five_fold_cv']['r2_mean']:.3f} ± {views['five_fold_cv']['r2_std']:.3f}; "
+        f"engagement R²: {engagement['five_fold_cv']['r2_mean']:.3f} ± {engagement['five_fold_cv']['r2_std']:.3f}. "
+        "The same channel can be on both sides of this split, so it flatters the model.",
+        f"- Later-in-time holdout, log views R²: {views['chronological_holdout']['r2']:.3f}; "
+        f"engagement R²: {engagement['chronological_holdout']['r2']:.3f}.",
+    ]
+    if unseen_views and unseen_engagement:
+        lines.append(
+            f"- **Channels never seen in training (the first-time-user case), log views R²: "
+            f"{unseen_views['r2_mean']:.3f} ± {unseen_views['r2_std']:.3f}; "
+            f"engagement R²: {unseen_engagement['r2_mean']:.3f} ± {unseen_engagement['r2_std']:.3f}.** This is the number to quote."
+        )
+    if script:
+        parts = ", ".join(f"{name.replace('_', ' ')} {value['r2']:.2f} (n={value['n']:,})" for name, value in script.items())
+        lines.append(f"- On unseen channels, by title script (log views R²): {parts}.")
+    lines += [
+        "",
+        "## Honest uncertainty (split-conformal intervals)",
+        "",
+        f"Intervals are calibrated on out-of-fold errors for channels the model had not seen, so that about "
+        f"{calibration['coverage_target']:.0%} of true values fall inside. "
         f"Measured coverage: {check['views_out_of_fold']:.1%} (views) and {check['engagement_out_of_fold']:.1%} (engagement) out-of-fold; "
-        f"on the later-in-time holdout {check['views_chronological_holdout']:.1%} and {check['engagement_chronological_holdout']:.1%}. "
-        f"A views interval is the forecast times {calibration['views_multiplier_low']:.2f} to {calibration['views_multiplier_high']:.2f}.\n\n"
-        "## Limits\n\n"
-        "The source contains only videos that trended, so it cannot answer whether an arbitrary upload will trend. "
-        "It also lacks thumbnails, channel history, audience retention and YouTube ranking signals. "
-        "Feature importance is not proof that changing one field will cause the predicted outcome.\n",
-        encoding="utf-8",
-    )
+        f"on the later-in-time holdout {check['views_chronological_holdout']:.1%} and {check['engagement_chronological_holdout']:.1%} "
+        "(that holdout includes channels the model has seen, so it is expected to be somewhat higher). "
+        f"A views interval is the forecast times {calibration['views_multiplier_low']:.2f} to {calibration['views_multiplier_high']:.2f}. "
+        f"{len(calibration.get('views_log_q_by_category', {}))} categories with enough videos get their own interval width.",
+        "",
+        "## Limits",
+        "",
+        "The source contains only videos that trended, so it cannot answer whether an arbitrary upload will trend; a forecast is "
+        "relative to other trending videos. "
+        "It also lacks thumbnails, channel history (the separate history model adds that), audience retention and YouTube ranking signals. "
+        "Feature importance is not proof that changing one field will cause the predicted outcome.",
+        "",
+    ]
+    MODEL_CARD_PATH.write_text("\n".join(lines), encoding="utf-8")
 
 
-def train_and_save() -> dict[str, object]:
-    """Train both targets, save the inference bundle, and create assessment reports."""
-    if not CLEAN_PATH.exists():
-        raise FileNotFoundError(f"Missing {CLEAN_PATH}. Run src/clean.py first.")
-    data = pd.read_csv(CLEAN_PATH)
-    feature_table = build_feature_table(data)
+def build_bundle(
+    data: pd.DataFrame,
+    *,
+    categories: dict[str, str] | None = None,
+    n_estimators: int = 180,
+) -> tuple[dict[str, object], dict[str, object], pd.DataFrame]:
+    """Everything training produces, from a table of cleaned videos, without touching the disk.
+
+    Returns the inference bundle, the look-alike (similarity) index and the feature table.  ``train_and_save`` writes them;
+    the tests call this directly on a small real sample.
+    """
+    feature_table = build_feature_table(data, categories)
     numeric_columns, categorical_columns = model_columns(feature_table)
     X = feature_table[numeric_columns + categorical_columns]
     timestamps = feature_table["publish_timestamp"]
-    template = make_model(numeric_columns, categorical_columns)
+    template = make_model(numeric_columns, categorical_columns, n_estimators)
+    channels = data["channel_title"].fillna("").astype(str).to_numpy()
 
-    metrics: dict[str, object] = {}
-    models: dict[str, Pipeline] = {}
-    oof: dict[str, np.ndarray] = {}
-    holdout: dict[str, tuple[np.ndarray, np.ndarray]] = {}
+    measurable = np.isfinite(feature_table["engagement_rate"].to_numpy(dtype=float))
+    rows_for = {"views_log": np.arange(len(feature_table)), "engagement_rate": np.flatnonzero(measurable)}
     targets = {
         "views_log": np.log1p(feature_table["views"]),
         "engagement_rate": feature_table["engagement_rate"],
     }
+
+    metrics: dict[str, object] = {}
+    models: dict[str, Pipeline] = {}
+    oof: dict[str, np.ndarray] = {}
+    unseen: dict[str, np.ndarray] = {}
+    holdout: dict[str, tuple[np.ndarray, np.ndarray]] = {}
     for target_name, target in targets.items():
         print(f"Evaluating {target_name} ...")
-        metrics[target_name], oof[target_name], hold_index, hold_pred = evaluate_target(
-            template, X, target, timestamps
+        rows = rows_for[target_name]
+        metrics[target_name], oof[target_name], hold_index, hold_pred, unseen_oof = evaluate_target_on_rows(
+            template, X, target, timestamps, channels, rows
         )
+        unseen[target_name] = unseen_oof if unseen_oof is not None else oof[target_name]
         holdout[target_name] = (hold_index, hold_pred)
         final_model = clone(template)
-        final_model.fit(X, target)
+        final_model.fit(X.iloc[rows], target.iloc[rows])  # engagement: only videos where it can be measured
         models[target_name] = final_model
+
+    # Accuracy for creators writing in other scripts, measured on channels the model had not seen.
+    non_latin = feature_table["title_non_latin_share"].to_numpy(dtype=float) >= 0.5
+    segments = {"latin_titles": ~non_latin, "non_latin_titles": non_latin}
+    metrics["views_log"]["unseen_channel_by_title_script"] = segment_accuracy(
+        targets["views_log"].to_numpy(dtype=float), unseen["views_log"], segments
+    )
+    metrics["engagement_rate"]["unseen_channel_by_title_script"] = segment_accuracy(
+        targets["engagement_rate"].to_numpy(dtype=float), unseen["engagement_rate"], segments
+    )
 
     numeric_summary = {
         column: {
@@ -440,19 +598,22 @@ def train_and_save() -> dict[str, object]:
     categories_series = feature_table[CATEGORY_COLUMN]
     calibration = artifacts.build_calibration(
         views_actual_log=targets["views_log"].to_numpy(),
-        views_oof=oof["views_log"],
+        views_oof=unseen["views_log"],
         engagement_actual=targets["engagement_rate"].to_numpy(),
-        engagement_oof=oof["engagement_rate"],
+        engagement_oof=unseen["engagement_rate"],
         holdout_index=holdout["views_log"][0],
         views_holdout_pred=holdout["views_log"][1],
         engagement_holdout_pred=holdout["engagement_rate"][1],
+        engagement_holdout_index=holdout["engagement_rate"][0],
+        categories=categories_series.to_numpy(),
     )
+    calibration["calibrated_on"] = "out-of-fold predictions for channels never seen in training"
     reference = artifacts.build_reference(
         category=categories_series,
         views_actual=feature_table["views"].to_numpy(),
         engagement_actual=feature_table["engagement_rate"].to_numpy(),
-        views_oof_log=oof["views_log"],
-        engagement_oof=oof["engagement_rate"],
+        views_oof_log=unseen["views_log"],
+        engagement_oof=unseen["engagement_rate"],
     )
     word_stats = artifacts.build_word_stats(
         data["title"], feature_table["views"].to_numpy(), feature_table["engagement_rate"].to_numpy(),
@@ -464,19 +625,36 @@ def train_and_save() -> dict[str, object]:
     background = X.sample(n=min(120, len(X)), random_state=RANDOM_STATE).reset_index(drop=True)
 
     bundle: dict[str, object] = {
-        "version": "ta4-explainable-v2",
+        "version": "ta4-explainable-v3",
         "models": models,
         "input_columns": numeric_columns + categorical_columns,
         "numeric_summary": numeric_summary,
         "categories": sorted(feature_table[CATEGORY_COLUMN].dropna().unique().tolist()),
         "training_rows": int(len(feature_table)),
+        "data_quality": {
+            "videos": int(len(feature_table)),
+            "engagement_not_measurable": int((~measurable).sum()),
+            "non_latin_titles": int(non_latin.sum()),
+            "channels": int(len(set(channels.tolist()))),
+        },
         "metrics": metrics,
         "calibration": calibration,
         "reference": reference,
         "word_stats": word_stats,
         "background": background,
-        "notes": "Targets: log1p(views) and engagement rate. Inputs are pre-publication metadata only.",
+        "notes": "Targets: log1p(views) and engagement rate (videos with ratings or comments switched off are left out of the "
+                 "engagement model). Inputs are pre-publication metadata only.",
     }
+    return bundle, similarity, feature_table
+
+
+def train_and_save() -> dict[str, object]:
+    """Train both targets, save the inference bundle, and create assessment reports."""
+    if not CLEAN_PATH.exists():
+        raise FileNotFoundError(f"Missing {CLEAN_PATH}. Run src/clean.py first.")
+    data = pd.read_csv(CLEAN_PATH)
+    bundle, similarity, feature_table = build_bundle(data)
+    metrics, calibration = bundle["metrics"], bundle["calibration"]
     MODELS_DIR.mkdir(parents=True, exist_ok=True)
     REPORTS_DIR.mkdir(parents=True, exist_ok=True)
     joblib.dump(bundle, BUNDLE_PATH, compress=3)
@@ -484,7 +662,7 @@ def train_and_save() -> dict[str, object]:
     CALIBRATION_PATH.write_text(json.dumps(calibration, indent=2), encoding="utf-8")
     METRICS_PATH.write_text(json.dumps(metrics, indent=2), encoding="utf-8")
     write_importance_reports(bundle)
-    write_model_card(metrics, len(feature_table), calibration)
+    write_model_card(metrics, len(feature_table), calibration, bundle["data_quality"])
     print(json.dumps(metrics, indent=2))
     print(f"Saved inference bundle to {BUNDLE_PATH}")
     return bundle
